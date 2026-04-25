@@ -1,0 +1,42 @@
+{
+  "name": "BlinkBuy Malawi",
+  "short_name": "BlinkBuy",
+  "description": "Malawi's #1 Local Services Marketplace",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a1628",
+  "theme_color": "#0a1628",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity", "shopping"],
+  "shortcuts": [
+    {
+      "name": "Find Services",
+      "url": "/services",
+      "description": "Browse local services"
+    },
+    {
+      "name": "Emergency Help",
+      "url": "/emergency",
+      "description": "Get immediate help"
+    },
+    {
+      "name": "Browse Jobs",
+      "url": "/jobs",
+      "description": "Find work opportunities"
+    }
+  ]
+}
