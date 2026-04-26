@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
@@ -30,6 +30,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [uMenu, setUMenu] = useState(false);
   const [lang, setLang] = useState<"en" | "ny">(getLanguage());
+  const [opacity, setOpacity] = useState(1);
+
+  useEffect(() => {
+    setOpacity(0);
+    const t = setTimeout(() => setOpacity(1), 150);
+    return () => clearTimeout(t);
+  }, [loc]);
 
   const toggleLang = () => {
     const n = lang === "en" ? "ny" : "en";
@@ -184,7 +191,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* ─── MAIN ─── */}
-      <main className="flex-1">{children}</main>
+      <main className="flex-1" style={{ opacity, transition: "opacity 150ms ease" }}>{children}</main>
 
       {/* ─── FOOTER ─── */}
       <footer className="bg-[hsl(215,55%,8%)] text-white/70 border-t border-white/5">
