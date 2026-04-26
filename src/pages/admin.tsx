@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Users, Briefcase, Shield, CheckCircle, Award, Trash2, Eye, TrendingUp } from "lucide-react";
-import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { isAdmin, formatMK } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabase";
 
 type Tab = "overview" | "users" | "services" | "reports";
 
@@ -28,14 +28,28 @@ export default function AdminPage() {
     setLoading(true);
     try {
       if (tab === "overview") {
-        const data = await api.get("/admin/stats");
-        setStats(data);
+        const [{ count: totalUsers }, { count: totalServices }, { count: totalJobs }] = await Promise.all([
+          supabase.from("profiles").select("*", { count: "exact", head: true }),
+          supabase.from("services").select("*", { count: "exact", head: true }),
+          supabase.from("jobs").select("*", { count: "exact", head: true }),
+        ]);
+        setStats({ totalUsers, totalServices, totalJobs });
       } else if (tab === "users") {
-        const data = await api.get("/admin/users?limit=50");
-        setUsers(data.users || []);
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(50);
+        if (error) throw error;
+        setUsers(data || []);
       } else if (tab === "services") {
-        const data = await api.get("/services?limit=50");
-        setServices(data.services || []);
+        const { data, error } = await supabase
+          .from("services")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(50);
+        if (error) throw error;
+        setServices(data || []);
       }
     } catch (e) {
       toast({ title: "Failed to load data", description: "Please try again.", variant: "destructive" });
@@ -45,54 +59,51 @@ export default function AdminPage() {
   };
 
   const verifyUser = async (userId: string, is_verified: boolean) => {
-    try {
-      await api.put(`/admin/users/${userId}`, { is_verified });
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_verified } : u));
-      toast({ title: is_verified ? "User verified" : "Verification removed" });
-    } catch (e) {
-      toast({ title: "Action failed", description: "Could not update user.", variant: "destructive" });
-    }
+    const { error } = await supabase
+      .from("profiles")
+      .update({ is_verified })
+      .eq("id", userId);
+    if (error) { toast({ title: "Action failed", variant: "destructive" }); return; }
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_verified } : u));
+    toast({ title: is_verified ? "User verified ✓" : "Verification removed" });
   };
 
   const featureService = async (serviceId: string, is_featured: boolean) => {
-    try {
-      await api.put(`/admin/services/${serviceId}`, { is_featured });
-      setServices(prev => prev.map(s => s.id === serviceId ? { ...s, is_featured } : s));
-      toast({ title: is_featured ? "Service featured" : "Service unfeatured" });
-    } catch (e) {
-      toast({ title: "Action failed", description: "Could not update service.", variant: "destructive" });
-    }
+    const { error } = await supabase
+      .from("services")
+      .update({ is_featured })
+      .eq("id", serviceId);
+    if (error) { toast({ title: "Action failed", variant: "destructive" }); return; }
+    setServices(prev => prev.map(s => s.id === serviceId ? { ...s, is_featured } : s));
+    toast({ title: is_featured ? "Service featured ⭐" : "Service unfeatured" });
   };
 
   const deleteUser = async (userId: string) => {
     if (!confirm("Delete this user? This cannot be undone.")) return;
-    try {
-      await api.delete(`/admin/users/${userId}`);
-      setUsers(prev => prev.filter(u => u.id !== userId));
-      toast({ title: "User deleted" });
-    } catch (e) {
-      toast({ title: "Delete failed", description: "Could not delete user.", variant: "destructive" });
-    }
+    const { error } = await supabase.from("profiles").delete().eq("id", userId);
+    if (error) { toast({ title: "Delete failed", variant: "destructive" }); return; }
+    setUsers(prev => prev.filter(u => u.id !== userId));
+    toast({ title: "User deleted" });
   };
 
   const assignBadge = async (userId: string, badge: string) => {
-    try {
-      await api.put(`/admin/users/${userId}`, { badge, badge_assigned_at: new Date().toISOString() });
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, badge } : u));
-      toast({ title: `Badge "${badge}" assigned` });
-    } catch (e) {
-      toast({ title: "Failed to assign badge", variant: "destructive" });
-    }
+    const { error } = await supabase
+      .from("profiles")
+      .update({ badge, badge_assigned_at: new Date().toISOString() })
+      .eq("id", userId);
+    if (error) { toast({ title: "Failed to assign badge", variant: "destructive" }); return; }
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, badge } : u));
+    toast({ title: `Badge "${badge}" assigned 🏅` });
   };
 
   const toggleBoost = async (userId: string, currentBoosted: boolean) => {
-    try {
-      await api.put(`/admin/users/${userId}`, { is_boosted: !currentBoosted, boosted_at: !currentBoosted ? new Date().toISOString() : null });
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_boosted: !currentBoosted } : u));
-      toast({ title: currentBoosted ? "Boost removed" : "User boosted to top" });
-    } catch (e) {
-      toast({ title: "Failed to update boost", variant: "destructive" });
-    }
+    const { error } = await supabase
+      .from("profiles")
+      .update({ is_boosted: !currentBoosted, boosted_at: !currentBoosted ? new Date().toISOString() : null })
+      .eq("id", userId);
+    if (error) { toast({ title: "Failed to update boost", variant: "destructive" }); return; }
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_boosted: !currentBoosted } : u));
+    toast({ title: currentBoosted ? "Boost removed" : "User boosted to top ⚡" });
   };
 
   if (isLoading) {
@@ -152,29 +163,18 @@ export default function AdminPage() {
           {/* Overview */}
           {tab === "overview" && stats && (
             <div className="space-y-5">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {[
                   { label: "Total Users", value: stats.totalUsers || 0, icon: Users, color: "text-blue-600" },
                   { label: "Total Services", value: stats.totalServices || 0, icon: Briefcase, color: "text-green-600" },
                   { label: "Total Jobs", value: stats.totalJobs || 0, icon: Briefcase, color: "text-purple-600" },
-                  { label: "Total Revenue", value: formatMK(stats.totalRevenue || 0), icon: TrendingUp, color: "text-amber-600" },
-                ].map(s => (
-                  <div key={s.label} className="bg-card border border-card-border rounded-xl p-4">
-                    <s.icon size={18} className={`${s.color} mb-2`} />
-                    <div className="text-2xl font-black">{s.value}</div>
-                    <div className="text-xs text-muted-foreground">{s.label}</div>
+                ].map(stat => (
+                  <div key={stat.label} className="bg-card border border-border rounded-xl p-4">
+                    <div className={`${stat.color} mb-2`}><stat.icon size={20} /></div>
+                    <div className="text-2xl font-black">{stat.value}</div>
+                    <div className="text-xs text-muted-foreground">{stat.label}</div>
                   </div>
                 ))}
-              </div>
-
-              <div className="bg-card border border-card-border rounded-xl p-5">
-                <h2 className="font-bold mb-3">Quick Actions</h2>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <button onClick={() => setTab("users")} className="p-3 bg-muted rounded-lg text-sm hover:bg-muted/80 transition-all">Manage Users</button>
-                  <button onClick={() => setTab("services")} className="p-3 bg-muted rounded-lg text-sm hover:bg-muted/80 transition-all">Feature Services</button>
-                  <Link href="/post-service" className="p-3 bg-primary/10 text-primary rounded-lg text-sm hover:bg-primary/20 transition-all text-center">Add Service</Link>
-                  <Link href="/post-job" className="p-3 bg-primary/10 text-primary rounded-lg text-sm hover:bg-primary/20 transition-all text-center">Post Job</Link>
-                </div>
               </div>
 
               <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
@@ -190,140 +190,149 @@ export default function AdminPage() {
 
           {/* Users */}
           {tab === "users" && (
-            <div className="bg-card border border-card-border rounded-xl overflow-hidden">
+            <div className="bg-card border border-border rounded-xl overflow-hidden">
               <div className="p-4 border-b border-border">
                 <h2 className="font-bold">All Users ({users.length})</h2>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted">
-                    <tr>
-                      <th className="text-left px-4 py-2 font-semibold text-xs text-muted-foreground">Name</th>
-                      <th className="text-left px-4 py-2 font-semibold text-xs text-muted-foreground">Role</th>
-                      <th className="text-left px-4 py-2 font-semibold text-xs text-muted-foreground">Location</th>
-                      <th className="text-left px-4 py-2 font-semibold text-xs text-muted-foreground">Status</th>
-                      <th className="text-left px-4 py-2 font-semibold text-xs text-muted-foreground">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {users.map(u => (
-                      <tr key={u.id} className="hover:bg-muted/50 transition-all">
-                        <td className="px-4 py-3">
-                          <div className="font-medium">{u.name}</div>
-                          <div className="text-xs text-muted-foreground">{u.email}</div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full capitalize">{u.role}</span>
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground">{u.location}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1.5">
-                            {u.is_verified && <span className="flex items-center gap-0.5 text-xs text-primary"><CheckCircle size={11} /> Verified</span>}
-                            {u.is_trusted && <span className="flex items-center gap-0.5 text-xs text-amber-600"><Award size={11} /> Trusted</span>}
-                            {!u.is_verified && !u.is_trusted && <span className="text-xs text-muted-foreground">Standard</span>}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <Link href={`/profile/${u.id}`} className="p-1 hover:bg-muted rounded transition-all">
-                              <Eye size={14} className="text-muted-foreground" />
-                            </Link>
-                            <button
-                              onClick={() => verifyUser(u.id, !u.is_verified)}
-                              className={`p-1 rounded transition-all ${u.is_verified ? "hover:bg-red-100 text-red-500" : "hover:bg-green-100 text-green-600"}`}
-                              title={u.is_verified ? "Remove verification" : "Verify user"}
-                            >
-                              <CheckCircle size={14} />
-                            </button>
-                            {/* Badge dropdown */}
-                            <select
-                              defaultValue=""
-                              onChange={e => { if (e.target.value) assignBadge(u.id, e.target.value); e.target.value = ""; }}
-                              className="text-xs border border-input rounded px-1 py-0.5 bg-background cursor-pointer"
-                              title="Assign badge"
-                            >
-                              <option value="" disabled>🏅 Badge</option>
-                              <option value="Verified">✅ Verified</option>
-                              <option value="Top Seller">🏆 Top Seller</option>
-                              <option value="Trusted">🛡️ Trusted</option>
-                              <option value="Featured">⭐ Featured</option>
-                            </select>
-                            {/* Boost button */}
-                            <button
-                              onClick={() => toggleBoost(u.id, u.is_boosted)}
-                              className={`p-1 rounded transition-all text-xs px-2 font-semibold ${u.is_boosted ? "bg-amber-100 text-amber-700 hover:bg-amber-200" : "hover:bg-amber-100 text-muted-foreground"}`}
-                              title={u.is_boosted ? "Remove boost" : "Boost to top"}
-                            >
-                              {u.is_boosted ? "⚡Boosted" : "⚡Boost"}
-                            </button>
-                            {u.role !== "admin" && (
-                              <button onClick={() => deleteUser(u.id)} className="p-1 hover:bg-red-100 text-red-500 rounded transition-all">
-                                <Trash2 size={14} />
-                              </button>
-                            )}
-                          </div>
-                        </td>
+              {users.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground">No users found</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted">
+                      <tr>
+                        <th className="text-left px-4 py-2 font-semibold text-xs text-muted-foreground">Name</th>
+                        <th className="text-left px-4 py-2 font-semibold text-xs text-muted-foreground">Role</th>
+                        <th className="text-left px-4 py-2 font-semibold text-xs text-muted-foreground">Location</th>
+                        <th className="text-left px-4 py-2 font-semibold text-xs text-muted-foreground">Status</th>
+                        <th className="text-left px-4 py-2 font-semibold text-xs text-muted-foreground">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {users.map(u => (
+                        <tr key={u.id} className="hover:bg-muted/50 transition-all">
+                          <td className="px-4 py-3">
+                            <div className="font-medium">{u.name}</div>
+                            <div className="text-xs text-muted-foreground">{u.email}</div>
+                            {u.badge && <div className="text-xs text-amber-600 font-semibold mt-0.5">🏅 {u.badge}</div>}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full capitalize">{u.role}</span>
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground text-xs">{u.location}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-col gap-0.5">
+                              {u.is_verified && <span className="flex items-center gap-0.5 text-xs text-primary"><CheckCircle size={11} /> Verified</span>}
+                              {u.is_boosted && <span className="flex items-center gap-0.5 text-xs text-amber-600"><TrendingUp size={11} /> Boosted</span>}
+                              {!u.is_verified && !u.is_boosted && <span className="text-xs text-muted-foreground">Standard</span>}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Link href={`/profile/${u.id}`} className="p-1 hover:bg-muted rounded transition-all">
+                                <Eye size={14} className="text-muted-foreground" />
+                              </Link>
+                              <button
+                                onClick={() => verifyUser(u.id, !u.is_verified)}
+                                className={`p-1 rounded transition-all ${u.is_verified ? "hover:bg-red-100 text-red-500" : "hover:bg-green-100 text-green-600"}`}
+                                title={u.is_verified ? "Remove verification" : "Verify user"}
+                              >
+                                <CheckCircle size={14} />
+                              </button>
+                              {/* Badge dropdown */}
+                              <select
+                                defaultValue=""
+                                onChange={e => { if (e.target.value) assignBadge(u.id, e.target.value); e.target.value = ""; }}
+                                className="text-xs border border-input rounded px-1 py-0.5 bg-background cursor-pointer"
+                                title="Assign badge"
+                              >
+                                <option value="" disabled>🏅 Badge</option>
+                                <option value="Verified">✅ Verified</option>
+                                <option value="Top Seller">🏆 Top Seller</option>
+                                <option value="Trusted">🛡️ Trusted</option>
+                                <option value="Featured">⭐ Featured</option>
+                              </select>
+                              {/* Boost button */}
+                              <button
+                                onClick={() => toggleBoost(u.id, u.is_boosted)}
+                                className={`px-2 py-0.5 rounded transition-all text-xs font-semibold ${u.is_boosted ? "bg-amber-100 text-amber-700 hover:bg-amber-200" : "hover:bg-amber-100 text-muted-foreground hover:text-amber-700"}`}
+                                title={u.is_boosted ? "Remove boost" : "Boost to top"}
+                              >
+                                {u.is_boosted ? "⚡ Boosted" : "⚡ Boost"}
+                              </button>
+                              {u.role !== "admin" && (
+                                <button onClick={() => deleteUser(u.id)} className="p-1 hover:bg-red-100 text-red-500 rounded transition-all">
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 
           {/* Services */}
           {tab === "services" && (
-            <div className="bg-card border border-card-border rounded-xl overflow-hidden">
+            <div className="bg-card border border-border rounded-xl overflow-hidden">
               <div className="p-4 border-b border-border">
                 <h2 className="font-bold">All Services ({services.length})</h2>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted">
-                    <tr>
-                      <th className="text-left px-4 py-2 font-semibold text-xs text-muted-foreground">Title</th>
-                      <th className="text-left px-4 py-2 font-semibold text-xs text-muted-foreground">Category</th>
-                      <th className="text-left px-4 py-2 font-semibold text-xs text-muted-foreground">Price</th>
-                      <th className="text-left px-4 py-2 font-semibold text-xs text-muted-foreground">Status</th>
-                      <th className="text-left px-4 py-2 font-semibold text-xs text-muted-foreground">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {services.map(s => (
-                      <tr key={s.id} className="hover:bg-muted/50 transition-all">
-                        <td className="px-4 py-3">
-                          <div className="font-medium max-w-48 truncate">{s.title}</div>
-                          <div className="text-xs text-muted-foreground">{s.location}</div>
-                        </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">{s.category}</td>
-                        <td className="px-4 py-3 font-semibold text-primary">{s.price_display || formatMK(s.price)}</td>
-                        <td className="px-4 py-3">
-                          {s.is_featured && <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full">Featured</span>}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <Link href={`/services/${s.id}`} className="p-1 hover:bg-muted rounded transition-all">
-                              <Eye size={14} className="text-muted-foreground" />
-                            </Link>
-                            <button
-                              onClick={() => featureService(s.id, !s.is_featured)}
-                              className={`text-xs px-2 py-1 rounded transition-all ${s.is_featured ? "bg-amber-100 text-amber-700 hover:bg-amber-200" : "bg-muted hover:bg-amber-100 text-muted-foreground hover:text-amber-700"}`}
-                            >
-                              {s.is_featured ? "Unfeature" : "Feature"}
-                            </button>
-                          </div>
-                        </td>
+              {services.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground">No services found</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted">
+                      <tr>
+                        <th className="text-left px-4 py-2 font-semibold text-xs text-muted-foreground">Title</th>
+                        <th className="text-left px-4 py-2 font-semibold text-xs text-muted-foreground">Category</th>
+                        <th className="text-left px-4 py-2 font-semibold text-xs text-muted-foreground">Price</th>
+                        <th className="text-left px-4 py-2 font-semibold text-xs text-muted-foreground">Status</th>
+                        <th className="text-left px-4 py-2 font-semibold text-xs text-muted-foreground">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {services.map(s => (
+                        <tr key={s.id} className="hover:bg-muted/50 transition-all">
+                          <td className="px-4 py-3">
+                            <div className="font-medium max-w-48 truncate">{s.title}</div>
+                            <div className="text-xs text-muted-foreground">{s.location}</div>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-muted-foreground">{s.category}</td>
+                          <td className="px-4 py-3 font-semibold text-primary">{s.price_display || formatMK(s.price)}</td>
+                          <td className="px-4 py-3">
+                            {s.is_featured && <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full">⭐ Featured</span>}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <Link href={`/services/${s.id}`} className="p-1 hover:bg-muted rounded transition-all">
+                                <Eye size={14} className="text-muted-foreground" />
+                              </Link>
+                              <button
+                                onClick={() => featureService(s.id, !s.is_featured)}
+                                className={`text-xs px-2 py-1 rounded transition-all ${s.is_featured ? "bg-amber-100 text-amber-700 hover:bg-amber-200" : "bg-muted hover:bg-amber-100 text-muted-foreground hover:text-amber-700"}`}
+                              >
+                                {s.is_featured ? "Unfeature" : "⭐ Feature"}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 
           {/* Reports */}
           {tab === "reports" && (
-            <div className="bg-card border border-card-border rounded-xl p-6 text-center">
+            <div className="bg-card border border-border rounded-xl p-6 text-center">
               <Shield size={48} className="text-muted-foreground mx-auto mb-3 opacity-30" />
               <h3 className="font-bold mb-1">User Reports</h3>
               <p className="text-muted-foreground text-sm">User reports and moderation queue will appear here.</p>
