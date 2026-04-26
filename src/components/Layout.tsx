@@ -86,49 +86,56 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   </Link>
 
                   {/* Post button */}
-                  {(profile?.role === "worker" || profile?.role === "both" || profile?.role === "admin") && (
-                    <Link href="/post-service"
-                      className="hidden sm:flex items-center gap-1 bg-[hsl(210,100%,56%)] hover:bg-[hsl(210,100%,50%)] text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all">
-                      <Plus size={13} /> Post
-                    </Link>
-                  )}
+                  <Link href="/post-service"
+                    className="hidden sm:flex items-center gap-1 bg-[hsl(210,100%,56%)] hover:bg-[hsl(210,100%,50%)] text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all">
+                    <Plus size={13} /> Post
+                  </Link>
 
                   <div className="relative">
                     <button onClick={() => setUMenu(!uMenu)}
                       className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 rounded-xl px-2.5 py-1.5 transition-all border border-white/10">
-                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[hsl(210,100%,60%)] to-[hsl(210,100%,40%)] flex items-center justify-center text-xs font-black">
-                        {profile?.name?.charAt(0).toUpperCase()}
+                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[hsl(210,100%,60%)] to-[hsl(210,100%,40%)] flex items-center justify-center text-xs font-black text-white">
+                        {profile?.name?.charAt(0).toUpperCase() || "?"}
                       </div>
                       <span className="text-xs hidden sm:block max-w-[80px] truncate font-medium">{profile?.name?.split(" ")[0]}</span>
                       <ChevronDown size={11} className={`transition-transform ${uMenu ? "rotate-180" : ""}`} />
                     </button>
                     {uMenu && (
-                      <div className="absolute right-0 top-full mt-1.5 w-48 bg-card border border-card-border rounded-xl shadow-2xl py-1.5 z-50 overflow-hidden">
+                      <div className="absolute right-0 top-full mt-1.5 w-48 bg-card border border-border rounded-xl shadow-2xl py-1.5 z-50 overflow-hidden">
                         <div className="px-3 py-2 border-b border-border mb-1">
-                          <div className="text-xs font-black truncate">{profile?.name || user.email}</div>
+                          <div className="text-xs font-black truncate text-foreground">{profile?.name || user.email}</div>
                           <div className="text-xs text-muted-foreground truncate">{user.email}</div>
                         </div>
-                        <Link href={`/profile/${user.id}`} className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-muted transition-all" onClick={() => setUMenu(false)}>
-                          <User size={13} /> My Profile
+                        <Link href={`/profile/${user.id}`}
+                          className="flex items-center gap-2 px-3 py-2 text-xs text-foreground hover:bg-muted transition-all"
+                          onClick={() => setUMenu(false)}>
+                          <User size={13} className="text-foreground" /> My Profile
                         </Link>
-                        {(profile?.role !== "customer") && (
-                          <Link href="/dashboard" className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-muted transition-all" onClick={() => setUMenu(false)}>
-                            <LayoutDashboard size={13} /> Dashboard
-                          </Link>
-                        )}
-                        <Link href="/settings" className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-muted transition-all" onClick={() => setUMenu(false)}>
-                          <Settings size={13} /> Settings
+                        <Link href="/dashboard"
+                          className="flex items-center gap-2 px-3 py-2 text-xs text-foreground hover:bg-muted transition-all"
+                          onClick={() => setUMenu(false)}>
+                          <LayoutDashboard size={13} className="text-foreground" /> Dashboard
                         </Link>
-                        <Link href="/about" className="flex items-center gap-2 px-3 py-2 text-xs hover:bg-muted transition-all" onClick={() => setUMenu(false)}>
+                        <Link href="/settings"
+                          className="flex items-center gap-2 px-3 py-2 text-xs text-foreground hover:bg-muted transition-all"
+                          onClick={() => setUMenu(false)}>
+                          <Settings size={13} className="text-foreground" /> Settings
+                        </Link>
+                        <Link href="/about"
+                          className="flex items-center gap-2 px-3 py-2 text-xs text-foreground hover:bg-muted transition-all"
+                          onClick={() => setUMenu(false)}>
                           <span>ℹ️</span> About Us
                         </Link>
                         {(profile?.role === "admin" || user.email === "otechy8@gmail.com") && (
-                          <Link href="/admin" className="flex items-center gap-2 px-3 py-2 text-xs text-primary hover:bg-muted transition-all" onClick={() => setUMenu(false)}>
-                            <Shield size={13} /> Admin Panel
+                          <Link href="/admin"
+                            className="flex items-center gap-2 px-3 py-2 text-xs text-primary font-semibold hover:bg-muted transition-all"
+                            onClick={() => setUMenu(false)}>
+                            <Shield size={13} className="text-primary" /> Admin Panel
                           </Link>
                         )}
                         <div className="border-t border-border mt-1 pt-1">
-                          <button onClick={doLogout} className="flex w-full items-center gap-2 px-3 py-2 text-xs text-destructive hover:bg-muted transition-all">
+                          <button onClick={doLogout}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-xs text-destructive hover:bg-muted transition-all">
                             <LogOut size={13} /> Sign Out
                           </button>
                         </div>
@@ -164,10 +171,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               ))}
             </div>
             {user && (
-              <div className="border-t border-white/10 px-4 py-2.5 flex gap-4">
+              <div className="border-t border-white/10 px-4 py-2.5 flex gap-4 flex-wrap">
                 <Link href="/messages" className="flex items-center gap-1.5 text-xs text-white/65 hover:text-white" onClick={() => setOpen(false)}><MessageCircle size={13}/> Messages</Link>
                 <Link href="/notifications" className="flex items-center gap-1.5 text-xs text-white/65 hover:text-white" onClick={() => setOpen(false)}><Bell size={13}/> Alerts</Link>
                 <Link href="/dashboard" className="flex items-center gap-1.5 text-xs text-white/65 hover:text-white" onClick={() => setOpen(false)}><LayoutDashboard size={13}/> Dashboard</Link>
+                <Link href={`/profile/${user.id}`} className="flex items-center gap-1.5 text-xs text-white/65 hover:text-white" onClick={() => setOpen(false)}><User size={13}/> Profile</Link>
+                <Link href="/settings" className="flex items-center gap-1.5 text-xs text-white/65 hover:text-white" onClick={() => setOpen(false)}><Settings size={13}/> Settings</Link>
               </div>
             )}
           </div>
