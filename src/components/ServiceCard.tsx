@@ -4,7 +4,7 @@ import { formatMK } from "@/lib/auth";
 
 interface Worker {
   id: string; name: string; profilePhoto?: string;
-  isVerified?: boolean; isTrusted?: boolean;
+  isVerified?: boolean; isTrusted?: boolean; isBoosted?: boolean; badge?: string;
   whatsapp?: string; phone?: string; isOnline?: boolean;
 }
 interface Service {
@@ -55,8 +55,12 @@ export function ServiceCard({ service }: { service: Service }) {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1">
                 <span className="text-xs font-bold truncate">{w.name}</span>
+                {w.isBoosted && <span title="Boosted">⚡</span>}
                 {w.isVerified && <CheckCircle size={11} className="text-primary shrink-0" />}
                 {w.isTrusted && <Award size={11} className="text-amber-500 shrink-0" />}
+                {w.badge && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">{w.badge}</span>
+                )}
               </div>
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 <MapPin size={9} /><span className="truncate">{service.location}</span>
