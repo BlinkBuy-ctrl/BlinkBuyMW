@@ -1,9 +1,51 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
-import { MessageCircle, Send, ArrowLeft, Search, Phone } from "lucide-react";
-import { api } from "@/lib/api";
+import { MessageCircle, Send, ArrowLeft, Search, Phone, Shield } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
+
+// otechy8@gmail.com Supabase Auth UUID — update if it changes
+const ADMIN_EMAIL = "otechy8@gmail.com";
+
+async function getAdminId(): Promise<string | null> {
+  const { data } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("email", ADMIN_EMAIL)
+    .single();
+  return data?.id ?? null;
+}
+
+async function getOrCreateConversation(userId: string, adminId: string): Promise<string> {
+  // Check existing
+  const { data: existing } = await supabase
+    .from("conversations")
+    .select("id")
+    .or(
+      `and(user1_id.eq.${userId},user2_id.eq.${adminId}),and(user1_id.eq.${adminId},user2_id.eq.${userId})`
+    )
+    .maybeSingle();
+
+  if (existing?.id) return existing.id;
+
+  // Create new
+  const { data: created, error } = await supabase
+    .from("conversations")
+    .insert({ user1_id: userId, user2_id: adminId })
+    .select("id")
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  // Send welcome message from admin
+  await supabase.from("messages").insert({
+    conversation_id: created.id,
+    sender_id: adminId,
+    content: "👋 Welcome to BlinkBuy! I'm the Otechy Help Center. Need help? Want to send payment proof or report an issue? Just message me here anytime!",
+  });
+
+  return created.id;
+}
 
 export default function MessagesPage() {
   const { user } = useAuth();
@@ -19,13 +61,17 @@ export default function MessagesPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Load conversations ──────────────────────────────────────────────────────
+  // Load conversations + ensure Help Center chat exists
   useEffect(() => {
     if (!user) { setLocation("/login"); return; }
     const load = async () => {
       try {
-        // Select both participants explicitly so we can resolve "the other user"
-        // without ambiguity regardless of whether current user is user1 or user2.
+        // Ensure Help Center conversation exists
+        const adminId = await getAdminId();
+        if (adminId && adminId !== user.id) {
+          await getOrCreateConversation(user.id, adminId);
+        }
+
         const { data, error } = await supabase
           .from("conversations")
           .select(`
@@ -39,9 +85,9 @@ export default function MessagesPage() {
 
         if (error) throw error;
 
-        // Attach derived helpers: `other`, `lastMessage`, `unreadCount`
         const enriched = (data ?? []).map((conv: any) => {
           const other = conv.user1?.id === user.id ? conv.user2 : conv.user1;
+          const isHelpCenter = other?.email === ADMIN_EMAIL;
           const sorted = [...(conv.messages ?? [])].sort(
             (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
           );
@@ -49,7 +95,14 @@ export default function MessagesPage() {
           const unreadCount = (conv.messages ?? []).filter(
             (m: any) => !m.read && m.sender_id !== user.id
           ).length;
-          return { ...conv, other, lastMessage, unreadCount };
+          return { ...conv, other, lastMessage, unreadCount, isHelpCenter };
+        });
+
+        // Sort: Help Center first
+        enriched.sort((a: any, b: any) => {
+          if (a.isHelpCenter) return -1;
+          if (b.isHelpCenter) return 1;
+          return 0;
         });
 
         setConversations(enriched);
@@ -62,34 +115,25 @@ export default function MessagesPage() {
     load();
   }, [user]);
 
-  // ── Load messages when conversation selected ────────────────────────────────
+  // Load messages when conversation selected
   useEffect(() => {
     if (selectedConv) loadMessages(selectedConv.id);
   }, [selectedConv]);
 
-  // ── Realtime: new messages ──────────────────────────────────────────────────
+  // Realtime: new messages
   useEffect(() => {
     if (!selectedConv || !user) return;
-
     const channel = supabase
       .channel(`conv:${selectedConv.id}`, { config: { presence: { key: user.id } } })
-      // New message inserts
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-          filter: `conversation_id=eq.${selectedConv.id}`,
-        },
-        (payload) => {
-          setMessages((prev) => {
-            const exists = prev.some((m) => m.id === payload.new.id);
-            return exists ? prev : [...prev, payload.new];
-          });
-        }
-      )
-      // Presence: track who is typing
+      .on("postgres_changes", {
+        event: "INSERT", schema: "public", table: "messages",
+        filter: `conversation_id=eq.${selectedConv.id}`,
+      }, (payload) => {
+        setMessages((prev) => {
+          const exists = prev.some((m) => m.id === payload.new.id);
+          return exists ? prev : [...prev, payload.new];
+        });
+      })
       .on("presence", { event: "sync" }, () => {
         const state = channel.presenceState<{ typing: boolean }>();
         const otherId = selectedConv.other?.id;
@@ -99,36 +143,41 @@ export default function MessagesPage() {
         setOtherIsTyping(isTyping);
       })
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-      setOtherIsTyping(false);
-    };
+    return () => { supabase.removeChannel(channel); setOtherIsTyping(false); };
   }, [selectedConv, user]);
 
-  // ── Auto-scroll ─────────────────────────────────────────────────────────────
+  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, otherIsTyping]);
 
-  // ── Helpers ─────────────────────────────────────────────────────────────────
   const loadMessages = async (convId: string) => {
     try {
-      const data = await api.get(`/conversations/${convId}/messages`);
-      setMessages(Array.isArray(data) ? data : []);
+      const { data, error } = await supabase
+        .from("messages")
+        .select("*")
+        .eq("conversation_id", convId)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      setMessages(data ?? []);
     } catch (e) {
       console.error(e);
     }
   };
 
   const sendMessage = async () => {
-    if (!newMsg.trim() || !selectedConv || sending) return;
+    if (!newMsg.trim() || !selectedConv || sending || !user) return;
     setSending(true);
     const text = newMsg;
     setNewMsg("");
     try {
-      const msg = await api.post(`/conversations/${selectedConv.id}/messages`, { content: text });
-      setMessages((prev) => [...prev, msg]);
+      const { data, error } = await supabase
+        .from("messages")
+        .insert({ conversation_id: selectedConv.id, sender_id: user.id, content: text })
+        .select()
+        .single();
+      if (error) throw error;
+      setMessages((prev) => [...prev, data]);
     } catch (e) {
       console.error(e);
       setNewMsg(text);
@@ -137,27 +186,24 @@ export default function MessagesPage() {
     }
   };
 
-  // Broadcast typing presence on the active channel
   const handleTyping = (value: string) => {
     setNewMsg(value);
     if (!selectedConv || !user) return;
-
-    // We need a reference to the active channel — look it up from supabase internals
-    const channelName = `conv:${selectedConv.id}`;
-    const ch = supabase.channel(channelName);
-
+    const ch = supabase.channel(`conv:${selectedConv.id}`);
     ch.track({ typing: true });
-
-    // Clear typing after 2 s of inactivity
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => {
-      ch.track({ typing: false });
-    }, 2000);
+    typingTimeoutRef.current = setTimeout(() => { ch.track({ typing: false }); }, 2000);
   };
 
   const filteredConvs = conversations.filter((c) =>
-    !search || c.other?.name?.toLowerCase().includes(search.toLowerCase())
+    !search || c.other?.name?.toLowerCase().includes(search.toLowerCase()) ||
+    (c.isHelpCenter && "otechy help center".includes(search.toLowerCase()))
   );
+
+  const getDisplayName = (conv: any) => {
+    if (conv.isHelpCenter) return "🛡️ Otechy Help Center";
+    return conv.other?.name ?? "Unknown";
+  };
 
   if (!user) return null;
 
@@ -165,15 +211,14 @@ export default function MessagesPage() {
     <div className="max-w-5xl mx-auto px-4 py-6 h-[calc(100vh-120px)]">
       <div className="flex h-full bg-card border border-card-border rounded-2xl overflow-hidden shadow-lg">
 
-        {/* ── Sidebar: conversation list ─────────────────────────────────── */}
+        {/* Sidebar */}
         <div className={`${selectedConv ? "hidden sm:flex" : "flex"} flex-col w-full sm:w-72 border-r border-border`}>
           <div className="p-4 border-b border-border">
             <h2 className="font-black text-base mb-3">Messages</h2>
             <div className="flex items-center gap-2 bg-background border border-input rounded-lg px-3 py-2">
               <Search size={13} className="text-muted-foreground" />
               <input
-                type="text"
-                value={search}
+                type="text" value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search..."
                 className="flex-1 text-sm outline-none bg-transparent"
@@ -188,59 +233,61 @@ export default function MessagesPage() {
                   <div key={i} className="flex items-center gap-3 animate-pulse">
                     <div className="w-10 h-10 rounded-full bg-muted shrink-0" />
                     <div className="flex-1 space-y-2">
-                      <div className="h-3 bg-muted rounded w-1/2" />
                       <div className="h-3 bg-muted rounded w-3/4" />
+                      <div className="h-2 bg-muted rounded w-1/2" />
                     </div>
                   </div>
                 ))}
               </div>
             ) : filteredConvs.length === 0 ? (
-              <div className="text-center py-12 px-4">
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
                 <MessageCircle size={32} className="text-muted-foreground mx-auto mb-2 opacity-30" />
                 <p className="text-sm text-muted-foreground">No conversations yet</p>
                 <p className="text-xs text-muted-foreground mt-1">Book a service to start chatting</p>
               </div>
             ) : (
               filteredConvs.map((conv) => {
-                const { other, lastMessage, unreadCount } = conv;
+                const { lastMessage, unreadCount } = conv;
+                const displayName = getDisplayName(conv);
                 return (
                   <button
                     key={conv.id}
                     onClick={() => setSelectedConv(conv)}
-                    className={`w-full flex items-center gap-3 p-3 hover:bg-muted transition-all text-left border-b border-border/50 ${
-                      selectedConv?.id === conv.id ? "bg-muted" : ""
-                    }`}
+                    className={`w-full flex items-center gap-3 p-3 hover:bg-muted transition-all text-left border-b border-border/50 ${selectedConv?.id === conv.id ? "bg-muted" : ""}`}
                   >
                     <div className="relative shrink-0">
-                      {other?.profile_photo ? (
-                        <img
-                          src={other.profile_photo}
-                          alt={other.name}
-                          className="w-10 h-10 rounded-full object-cover"
-                        />
+                      {conv.isHelpCenter ? (
+                        <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
+                          <Shield size={18} className="text-white" />
+                        </div>
+                      ) : conv.other?.profile_photo ? (
+                        <img src={conv.other.profile_photo} alt={conv.other.name} className="w-10 h-10 rounded-full object-cover" />
                       ) : (
                         <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
-                          {other?.name?.charAt(0) ?? "?"}
+                          {conv.other?.name?.charAt(0) ?? "?"}
                         </div>
                       )}
-                      {other?.is_online && (
+                      {!conv.isHelpCenter && conv.other?.is_online && (
+                        <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white" />
+                      )}
+                      {conv.isHelpCenter && (
                         <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold truncate">{other?.name ?? "Unknown"}</span>
+                        <span className="text-sm font-semibold truncate">{displayName}</span>
                         {lastMessage && (
                           <span className="text-xs text-muted-foreground">
-                            {new Date(lastMessage.created_at).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                            {new Date(lastMessage.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                           </span>
                         )}
                       </div>
                       {lastMessage && (
                         <p className="text-xs text-muted-foreground truncate">{lastMessage.content}</p>
+                      )}
+                      {conv.isHelpCenter && !lastMessage && (
+                        <p className="text-xs text-primary truncate">Tap to chat with support</p>
                       )}
                     </div>
                     {unreadCount > 0 && (
@@ -255,91 +302,59 @@ export default function MessagesPage() {
           </div>
         </div>
 
-        {/* ── Chat area ─────────────────────────────────────────────────── */}
+        {/* Chat area */}
         {selectedConv ? (
           <div className="flex-1 flex flex-col">
-            {/* Header */}
-            {(() => {
-              const { other } = selectedConv;
-              return (
-                <div className="flex items-center gap-3 p-4 border-b border-border">
-                  <button
-                    onClick={() => setSelectedConv(null)}
-                    className="sm:hidden text-muted-foreground hover:text-foreground"
-                  >
-                    <ArrowLeft size={18} />
-                  </button>
-                  <div className="relative">
-                    {other?.profile_photo ? (
-                      <img
-                        src={other.profile_photo}
-                        alt={other.name}
-                        className="w-9 h-9 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
-                        {other?.name?.charAt(0)}
-                      </div>
-                    )}
-                    {other?.is_online && (
-                      <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white" />
-                    )}
+            <div className="flex items-center gap-3 p-4 border-b border-border">
+              <button onClick={() => setSelectedConv(null)} className="sm:hidden text-muted-foreground hover:text-foreground">
+                <ArrowLeft size={18} />
+              </button>
+              <div className="relative">
+                {selectedConv.isHelpCenter ? (
+                  <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center">
+                    <Shield size={16} className="text-white" />
                   </div>
-                  <div className="flex-1">
-                    <div className="font-bold text-sm">{other?.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {otherIsTyping ? (
-                        <span className="text-primary animate-pulse">typing…</span>
-                      ) : other?.is_online ? (
-                        "Online"
-                      ) : (
-                        "Offline"
-                      )}
-                    </div>
+                ) : selectedConv.other?.profile_photo ? (
+                  <img src={selectedConv.other.profile_photo} alt={selectedConv.other.name} className="w-9 h-9 rounded-full object-cover" />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
+                    {selectedConv.other?.name?.charAt(0)}
                   </div>
-                  {other?.phone && (
-                    <a
-                      href={`tel:${other.phone}`}
-                      className="p-2 hover:bg-muted rounded-lg transition-all"
-                    >
-                      <Phone size={16} className="text-muted-foreground" />
-                    </a>
-                  )}
+                )}
+                <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white" />
+              </div>
+              <div className="flex-1">
+                <div className="font-bold text-sm">{getDisplayName(selectedConv)}</div>
+                <div className="text-xs text-muted-foreground">
+                  {selectedConv.isHelpCenter ? (
+                    <span className="text-green-600">Official Support</span>
+                  ) : otherIsTyping ? (
+                    <span className="text-primary animate-pulse">typing…</span>
+                  ) : selectedConv.other?.is_online ? "Online" : "Offline"}
                 </div>
-              );
-            })()}
+              </div>
+              {!selectedConv.isHelpCenter && selectedConv.other?.phone && (
+                <a href={`tel:${selectedConv.other.phone}`} className="p-2 hover:bg-muted rounded-lg transition-all">
+                  <Phone size={16} className="text-muted-foreground" />
+                </a>
+              )}
+            </div>
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {messages.map((msg) => {
-                // API returns camelCase (senderId) but realtime returns snake_case (sender_id)
-                const isMine = (msg.senderId ?? msg.sender_id) === user.id;
+                const isMine = msg.sender_id === user.id;
                 return (
                   <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
-                    <div
-                      className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm ${
-                        isMine
-                          ? "bg-primary text-primary-foreground rounded-br-none"
-                          : "bg-muted text-foreground rounded-bl-none"
-                      }`}
-                    >
+                    <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm ${isMine ? "bg-primary text-primary-foreground rounded-br-none" : "bg-muted text-foreground rounded-bl-none"}`}>
                       {msg.content}
-                      <div
-                        className={`text-xs mt-1 ${
-                          isMine ? "text-primary-foreground/60" : "text-muted-foreground"
-                        }`}
-                      >
-                        {new Date(msg.createdAt ?? msg.created_at).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                      <div className={`text-xs mt-1 ${isMine ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
+                        {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </div>
                     </div>
                   </div>
                 );
               })}
-
-              {/* Typing indicator bubble */}
               {otherIsTyping && (
                 <div className="flex justify-start">
                   <div className="bg-muted text-foreground px-3 py-2 rounded-2xl rounded-bl-none text-sm flex items-center gap-1">
@@ -349,7 +364,6 @@ export default function MessagesPage() {
                   </div>
                 </div>
               )}
-
               <div ref={messagesEndRef} />
             </div>
 
@@ -357,11 +371,10 @@ export default function MessagesPage() {
             <div className="p-4 border-t border-border">
               <div className="flex items-center gap-2">
                 <input
-                  type="text"
-                  value={newMsg}
+                  type="text" value={newMsg}
                   onChange={(e) => handleTyping(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
-                  placeholder="Type a message..."
+                  placeholder={selectedConv.isHelpCenter ? "Message Otechy Help Center..." : "Type a message..."}
                   className="flex-1 px-4 py-2.5 rounded-xl border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
                 />
                 <button
