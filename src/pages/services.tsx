@@ -18,7 +18,7 @@ const CATEGORIES = [
   "Emergency & Quick Help",
 ];
 
-const CITIES = ["All Locations", "Lilongwe", "Blantyre", "Mzuzu", "Zomba", "Kasungu", "Mangochi", "Dedza", "Salima"];
+const CITIES = ["All Locations","Balaka","Blantyre","Chikwawa","Chiradzulu","Chitipa","Dedza","Dowa","Karonga","Kasungu","Likoma","Lilongwe","Machinga","Mangochi","Mchinji","Mulanje","Mwanza","Mzimba","Neno","Nkhata Bay","Nkhotakota","Nsanje","Ntcheu","Ntchisi","Phalombe","Rumphi","Salima","Thyolo","Zomba"];
 
 const PRICE_RANGES = [
   { label: "Any Price", min: 0, max: 0 },
