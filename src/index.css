@@ -212,7 +212,7 @@
 /* ── Mobile app container — phone-width on desktop ── */
 @media (min-width: 480px) {
   #root {
-    max-width: 480px;
+    max-width: 430px;
     margin: 0 auto;
     box-shadow: 0 0 40px rgba(0,0,0,0.15);
     min-height: 100vh;
