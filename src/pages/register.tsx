@@ -19,18 +19,7 @@ function GoogleIcon() {
 
 function Spinner() {
   return (
-    <span
-      className="google-btn-spinner"
-      style={{
-        display: "inline-block",
-        width: 18,
-        height: 18,
-        border: "2.5px solid #d1d5db",
-        borderTopColor: "#6b7280",
-        borderRadius: "50%",
-        flexShrink: 0,
-      }}
-    />
+    <span style={{ display:"inline-block", width:18, height:18, border:"2.5px solid #d1d5db", borderTopColor:"#6b7280", borderRadius:"50%", flexShrink:0 }} />
   );
 }
 
@@ -48,7 +37,7 @@ export default function RegisterPage() {
     phone: "",
     whatsapp: "",
     password: "",
-    role: "customer" as "customer" | "worker" | "both",
+    role: "both" as "both",
     location: "Lilongwe",
   });
 
@@ -94,7 +83,7 @@ export default function RegisterPage() {
             <span className="font-black text-2xl">BlinkBuy</span>
           </Link>
           <h1 className="text-2xl font-black text-foreground">Create your account</h1>
-          <p className="text-muted-foreground text-sm mt-1">Join thousands of Malawians on BlinkBuy</p>
+          <p className="text-muted-foreground text-sm mt-1">Book services & offer your skills — all in one account</p>
         </div>
 
         <div className="bg-card border border-card-border rounded-2xl p-6 shadow-lg">
@@ -104,7 +93,7 @@ export default function RegisterPage() {
             </div>
           )}
 
-          {/* ── Google OAuth button ── */}
+          {/* Google OAuth */}
           <button
             type="button"
             onClick={handleGoogleSignIn}
@@ -115,33 +104,16 @@ export default function RegisterPage() {
             <span>{googleLoading ? "Redirecting…" : "Continue with Google"}</span>
           </button>
 
-          {/* ── Divider ── */}
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px" }}>
-            <div style={{ flex: 1, height: "1px", backgroundColor: "#e5e7eb" }} />
-            <span style={{ fontSize: "12px", color: "#9ca3af", fontWeight: 500 }}>or register with email</span>
-            <div style={{ flex: 1, height: "1px", backgroundColor: "#e5e7eb" }} />
+          {/* Divider */}
+          <div style={{ display:"flex", alignItems:"center", gap:"12px", marginBottom:"20px" }}>
+            <div style={{ flex:1, height:"1px", backgroundColor:"#e5e7eb" }} />
+            <span style={{ fontSize:"12px", color:"#9ca3af", fontWeight:500 }}>or register with email</span>
+            <div style={{ flex:1, height:"1px", backgroundColor:"#e5e7eb" }} />
           </div>
 
-          {/* ── Role selector ── */}
-          <div className="mb-5">
-            <label className="text-sm font-medium text-foreground block mb-2">I want to:</label>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { value: "customer", label: "book services", desc: "Find & book services" },
-                { value: "worker", label: "List my skills", desc: "Offer services" },
-                { value: "both", label: "Both", desc: "Hire and offer" },
-              ].map(opt => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => set("role", opt.value)}
-                  className={`p-3 rounded-xl border text-center transition-all ${form.role === opt.value ? "border-primary bg-primary/10 text-primary" : "border-border hover:border-primary/50"}`}
-                >
-                  <div className="text-xs font-bold">{opt.label}</div>
-                  <div className="text-xs text-muted-foreground">{opt.desc}</div>
-                </button>
-              ))}
-            </div>
+          {/* Info banner — replaces role selector */}
+          <div className="mb-5 bg-primary/10 border border-primary/20 rounded-xl px-4 py-3 text-sm text-primary font-medium text-center">
+            ✅ Your account lets you both <strong>book services</strong> and <strong>offer your skills</strong>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
