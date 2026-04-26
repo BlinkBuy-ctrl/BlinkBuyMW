@@ -73,6 +73,12 @@ export default function PostItemPage() {
         seller_id: user.id,
       });
       if (error) throw new Error(error.message);
+      await supabase.from("notifications").insert({
+        type: "new_listing",
+        message: `Someone just listed: ${form.title} in ${form.location}`,
+        target: "all",
+        created_at: new Date().toISOString(),
+      });
       setLocation("/marketplace");
     } catch (e: any) {
       setError(e.message || "Failed to post item");
