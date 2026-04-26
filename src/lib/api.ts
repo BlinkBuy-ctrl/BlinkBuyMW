@@ -97,6 +97,7 @@ async function get(url: string): Promise<any> {
   if (seg[0] === "services" && seg.length === 1) {
     let q = supabase.from("services").select("*, profiles(*)");
     q = applyFilters(q, params);
+    q = q.order("is_boosted", { ascending: false }).order("created_at", { ascending: false });
     const { data, error } = await q;
     throwIfError(error);
     return { services: (data ?? []).map(normalizeService) };
