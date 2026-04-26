@@ -226,11 +226,6 @@ async function get(url: string): Promise<any> {
     throwIfError(error);
     return data ?? [];
   }
-    q = applyFilters(q, params);
-    const { data, error } = await q;
-    throwIfError(error);
-    return data ?? [];
-  }
 
   // --- /notifications ---
   if (seg[0] === "notifications" && seg.length === 1) {
