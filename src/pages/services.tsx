@@ -72,7 +72,35 @@ export default function ServicesPage() {
     }
   };
 
-  useEffect(() => { fetchServices(); }, [search, category, location, priceRange, onlineOnly, sortBy, page]);
+  useEffect(() => {
+    let mounted = true;
+    const run = async () => {
+      setLoading(true);
+      try {
+        const qp = new URLSearchParams();
+        if (search) qp.set("search", search);
+        if (category !== "All Categories") qp.set("category", category);
+        if (location !== "All Locations") qp.set("location", location);
+        if (onlineOnly) qp.set("isOnline", "true");
+        if (priceRange > 0) {
+          const range = PRICE_RANGES[priceRange];
+          if (range.min) qp.set("minPrice", String(range.min));
+          if (range.max) qp.set("maxPrice", String(range.max));
+        }
+        qp.set("sortBy", sortBy);
+        qp.set("page", String(page));
+        qp.set("limit", "12");
+        const data = await api.get(`/services?${qp.toString()}`);
+        if (mounted) { setServices(data.services || []); setTotal(data.total || 0); }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    run();
+    return () => { mounted = false; };
+  }, [search, category, location, priceRange, onlineOnly, sortBy, page]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();

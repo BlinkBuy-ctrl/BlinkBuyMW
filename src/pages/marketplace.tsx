@@ -49,7 +49,31 @@ export default function MarketplacePage() {
     }
   };
 
-  useEffect(() => { fetchItems(); }, [search, category, loc, page]);
+  useEffect(() => {
+    let mounted = true;
+    const run = async () => {
+      setLoading(true);
+      try {
+        let query = supabase
+          .from("marketplace_items")
+          .select("*", { count: "exact" })
+          .order("created_at", { ascending: false })
+          .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
+        if (search) query = query.ilike("title", `%${search}%`);
+        if (category !== "All Categories") query = query.eq("category", category);
+        if (loc) query = query.eq("location", loc);
+        const { data, count, error } = await query;
+        if (error) throw error;
+        if (mounted) { setItems(data || []); setTotal(count || 0); }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    run();
+    return () => { mounted = false; };
+  }, [search, category, loc, page]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">

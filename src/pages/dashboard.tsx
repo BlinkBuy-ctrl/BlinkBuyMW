@@ -14,9 +14,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Wait for auth to finish loading before deciding to redirect
     if (authLoading) return;
     if (!user) { setLocation("/login"); return; }
+    let mounted = true;
 
     const load = async () => {
       try {
@@ -24,15 +24,15 @@ export default function DashboardPage() {
           api.get("/users/me/stats").catch(() => ({})),
           api.get(`/services?workerId=${user.id}&limit=10`),
         ]);
-        setStats(statsData);
-        setMyServices(servicesData.services || []);
+        if (mounted) { setStats(statsData); setMyServices(servicesData.services || []); }
       } catch (e) {
         console.error(e);
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
     load();
+    return () => { mounted = false; };
   }, [user, authLoading]);
 
   // Show spinner while auth is resolving — prevents premature redirect

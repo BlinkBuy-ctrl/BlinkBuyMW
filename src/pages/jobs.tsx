@@ -39,7 +39,28 @@ export default function JobsPage() {
     }
   };
 
-  useEffect(() => { fetchJobs(); }, [search, loc, jobType, page]);
+  useEffect(() => {
+    let mounted = true;
+    const run = async () => {
+      setLoading(true);
+      try {
+        const qp = new URLSearchParams();
+        if (search) qp.set("search", search);
+        if (loc !== "All Locations") qp.set("location", loc);
+        if (jobType !== "All Types") qp.set("type", jobType);
+        qp.set("page", String(page));
+        qp.set("limit", "10");
+        const data = await api.get(`/jobs?${qp.toString()}`);
+        if (mounted) { setJobs(data.jobs || []); setTotal(data.total || 0); }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    run();
+    return () => { mounted = false; };
+  }, [search, loc, jobType, page]);
 
   const handleSearch = (e: React.FormEvent) => { e.preventDefault(); setPage(1); fetchJobs(); };
 
