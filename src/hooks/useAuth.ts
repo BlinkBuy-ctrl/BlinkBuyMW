@@ -2,7 +2,7 @@ import { useState, useEffect, createContext, useContext } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { User } from '@supabase/supabase-js'
 
-// export interface AuthContextType {
+export interface AuthContextType {
   user: User | null
   profile: any | null
   isLoading: boolean
@@ -30,7 +30,7 @@ export function useAuthState(): AuthContextType {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    // Get initial session — wait for profile fetch before marking loading done
+    // Get initial session on mount — this handles auto-login
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       setUser(session?.user ?? null)
       if (session?.user) {
@@ -39,14 +39,14 @@ export function useAuthState(): AuthContextType {
       setIsLoading(false)
     })
 
-    // Listen for auth changes.
-    // Welcome message + notification are handled by the DB trigger
-    // (handle_new_user_welcome on public.profiles) — no frontend action needed
-    // for new signups, including Google OAuth redirects.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // Listen for auth state changes (login, logout, token refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user ?? null)
-      if (session?.user) fetchProfile(session.user.id)
-      else setProfile(null)
+      if (session?.user) {
+        await fetchProfile(session.user.id)
+      } else {
+        setProfile(null)
+      }
     })
 
     return () => subscription.unsubscribe()
@@ -77,13 +77,17 @@ export function useAuthState(): AuthContextType {
       email: data.email,
       password: data.password,
       options: {
-        data: { name: data.name, phone: data.phone, role: data.role, location: data.location }
+        data: {
+          name: data.name,
+          phone: data.phone,
+          role: data.role,
+          location: data.location
+        }
       }
     })
     if (error) throw new Error(error.message)
 
-    // If email confirmation is disabled, a session is returned immediately.
-    // Either way, sign in to ensure the user is authenticated.
+    // Auto sign-in if email confirmation is disabled
     if (signUpData.user && !signUpData.session) {
       const { error: loginError } = await supabase.auth.signInWithPassword({
         email: data.email,
@@ -91,11 +95,6 @@ export function useAuthState(): AuthContextType {
       })
       if (loginError) throw new Error(loginError.message)
     }
-
-    // ✅ Welcome conversation + message + bell notification are created
-    // automatically by the Supabase trigger `on_new_user_welcome` on
-    // public.profiles — no frontend insert needed here.
-    // This also covers Google OAuth signups (trigger fires on profile insert).
   }
 
   const logout = async () => {
