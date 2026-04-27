@@ -35,17 +35,17 @@ export default function ServiceDetailPage() {
       try {
         const [svcData, rvData] = await Promise.all([
           api.get(`/services/${id}`),
-          api.get(`/services/${id}/reviews`),
+          api.get(`/services/${id}/reviews`).catch(() => []),
         ]);
         const svc = svcData.service || svcData;
-        // Ensure worker.id is always available (Supabase may return profiles nested)
         if (svc && svc.worker && !svc.worker.id && svc.profiles?.id) {
           svc.worker = { ...svc.worker, id: svc.profiles.id };
         }
-        setService(svc);
+        setService(svc || null);
         setReviews(Array.isArray(rvData) ? rvData : (rvData.reviews || []));
       } catch (e) {
         console.error(e);
+        setService(null);
       } finally {
         setLoading(false);
       }

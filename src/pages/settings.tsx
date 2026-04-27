@@ -18,7 +18,7 @@ const TUTORIAL_STEPS = [
 ];
 
 export default function SettingsPage() {
-  const { user, profile, setProfile } = useAuth();
+  const { user, profile, setProfile, isLoading: authLoading } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -55,6 +55,20 @@ export default function SettingsPage() {
     bio: profile?.bio || "",
     profile_photo: profile?.profile_photo || "",
   });
+
+  // Sync form when profile loads async
+  useEffect(() => {
+    if (profile) {
+      setForm({
+        name: profile.name || "",
+        phone: profile.phone || "",
+        whatsapp: profile.whatsapp || "",
+        location: profile.location || "Lilongwe",
+        bio: profile.bio || "",
+        profile_photo: profile.profile_photo || "",
+      });
+    }
+  }, [profile]);
 
   const set = (key: string, value: string) => setForm(prev => ({ ...prev, [key]: value }));
 
@@ -131,6 +145,14 @@ export default function SettingsPage() {
     }
     setLang(l); setLanguage(l);
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   if (!user) { setLocation("/login"); return null; }
 
@@ -365,7 +387,7 @@ export default function SettingsPage() {
           {profile?.badge && (
             <div className="flex justify-between">
               <span className="text-muted-foreground">Badge</span>
-              <span className="font-medium text-amber-600">🏅 {profile.badge}</span>
+              <span className="font-medium text-amber-600">🏅 {profile?.badge}</span>
             </div>
           )}
         </div>
