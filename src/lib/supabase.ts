@@ -11,4 +11,21 @@ const supabaseAnonKey =
   import.meta.env.VITE_SUPABASE_ANON_KEY ||
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0ampzZ2JoYmV1enFycHlyc3BhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0MzY4NjMsImV4cCI6MjA5MjAxMjg2M30.cjn4PJCkZQ31B0DZ5NRz86Pehn9IRTDLghSFnt6jB-A"
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,          // Keep session in localStorage
+    autoRefreshToken: true,        // Auto refresh JWT
+    detectSessionInUrl: true,      // Handle OAuth redirects
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10,         // Throttle realtime events
+    },
+    timeout: 20000,                // 20s timeout on realtime connections
+  },
+  global: {
+    headers: {
+      'X-Client-Info': 'blinkbuy-web',
+    },
+  },
+})

@@ -1,3 +1,17 @@
+import { cachedFetch } from "./cache";
+
+// ---------------------------------------------------------------------------
+// Request timeout wrapper — prevents infinite hanging
+// ---------------------------------------------------------------------------
+function withTimeout<T>(promise: Promise<T>, ms = 12000): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`Request timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
 import { supabase } from "./supabase";
 
 // ---------------------------------------------------------------------------
@@ -247,6 +261,11 @@ async function get(url: string): Promise<any> {
     throwIfError(error);
     return data ?? [];
   }
+    q = applyFilters(q, params);
+    const { data, error } = await q;
+    throwIfError(error);
+    return data ?? [];
+  }
 
   // --- /notifications ---
   if (seg[0] === "notifications" && seg.length === 1) {
@@ -489,8 +508,18 @@ async function del(url: string): Promise<any> {
 // ---------------------------------------------------------------------------
 
 export const api = {
-  get,
-  post,
-  put,
-  delete: del,
+  get: (url: string) => withTimeout(get(url)),
+  post: (url: string, body?: any) => withTimeout(post(url, body)),
+  put: (url: string, body?: any) => withTimeout(put(url, body)),
+  delete: (url: string) => withTimeout(del(url)),
 };
+
+// ---------------------------------------------------------------------------
+// Cached GET wrapper — for list endpoints that don't change often
+// Cache key = URL, TTL = 2 minutes for lists
+// ---------------------------------------------------------------------------
+async function getCached(url: string): Promise<any> {
+  return cachedFetch(url, () => get(url), 2 * 60 * 1000);
+}
+
+export { getCached };
