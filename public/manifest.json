@@ -3,40 +3,68 @@
   "short_name": "BlinkBuy",
   "description": "Malawi's #1 Local Services Marketplace",
   "start_url": "/",
+  "id": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "background_color": "#0a1628",
   "theme_color": "#0a1628",
   "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "en",
   "icons": [
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "categories": ["business", "productivity", "shopping"],
+  "screenshots": [],
   "shortcuts": [
     {
       "name": "Find Services",
+      "short_name": "Services",
       "url": "/services",
       "description": "Browse local services"
     },
     {
       "name": "Emergency Help",
+      "short_name": "Emergency",
       "url": "/emergency",
       "description": "Get immediate help"
     },
     {
       "name": "Browse Jobs",
+      "short_name": "Jobs",
       "url": "/jobs",
       "description": "Find work opportunities"
+    },
+    {
+      "name": "Messages",
+      "short_name": "Messages",
+      "url": "/messages",
+      "description": "Your conversations"
     }
-  ]
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false
 }
