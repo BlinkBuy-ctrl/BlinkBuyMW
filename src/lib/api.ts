@@ -4,9 +4,30 @@ import { supabase } from "./supabase";
 // Normalizers — map profiles(*) → named field expected by pages
 // ---------------------------------------------------------------------------
 
+function normalizeWorker(p: any) {
+  if (!p) return null;
+  return {
+    ...p,
+    profilePhoto: p.profilePhoto ?? p.profile_photo ?? null,
+    isOnline: p.isOnline ?? p.is_online ?? false,
+    isVerified: p.isVerified ?? p.is_verified ?? false,
+    isTrusted: p.isTrusted ?? p.is_trusted ?? false,
+    isBoosted: p.isBoosted ?? p.is_boosted ?? false,
+  };
+}
+
 function normalizeService(s: any) {
   if (!s) return s;
-  return { ...s, worker: s.worker ?? s.profiles ?? null };
+  const raw = s.worker ?? s.profiles ?? null;
+  return {
+    ...s,
+    isFeatured: s.isFeatured ?? s.is_featured ?? false,
+    isOnline: s.isOnline ?? s.is_online ?? false,
+    priceDisplay: s.priceDisplay ?? s.price_display ?? null,
+    priceType: s.priceType ?? s.price_type ?? null,
+    reviewCount: s.reviewCount ?? s.review_count ?? 0,
+    worker: normalizeWorker(raw),
+  };
 }
 
 function normalizeJob(j: any) {
@@ -223,6 +244,11 @@ async function get(url: string): Promise<any> {
       .select("*, user1:profiles!conversations_user1_id_fkey(*), user2:profiles!conversations_user2_id_fkey(*), messages(*)")
       .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
       .order("updated_at", { ascending: false });
+    throwIfError(error);
+    return data ?? [];
+  }
+    q = applyFilters(q, params);
+    const { data, error } = await q;
     throwIfError(error);
     return data ?? [];
   }
