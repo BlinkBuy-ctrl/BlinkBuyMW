@@ -80,8 +80,17 @@ export default function MessagesPage() {
   const loadConversations = async () => {
     if (!user) return;
     try {
-      const adminId = await getAdminId();
-      if (adminId && adminId !== user.id) await getOrCreateConversation(user.id, adminId);
+      // Timeout to prevent hanging on slow connections
+      const adminId = await Promise.race([
+        getAdminId(),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+      ]);
+      if (adminId && adminId !== user.id) {
+        await Promise.race([
+          getOrCreateConversation(user.id, adminId),
+          new Promise<void>((resolve) => setTimeout(resolve, 5000)),
+        ]);
+      }
       const { data, error } = await supabase
         .from("conversations")
         .select(`*, user1:profiles!conversations_user1_id_fkey(*), user2:profiles!conversations_user2_id_fkey(*), messages(id, content, sender_id, read, created_at)`)
@@ -134,7 +143,7 @@ export default function MessagesPage() {
     return () => { supabase.removeChannel(ch); };
   }, [user]);
 
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, otherIsTyping]);
+  useEffect(() => { if (!selectedConv) return; messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, otherIsTyping, selectedConv]);
 
   const loadMessages = async (convId: string) => {
     const { data } = await supabase.from("messages").select("*").eq("conversation_id", convId).order("created_at", { ascending: true });

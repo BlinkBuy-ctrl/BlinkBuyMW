@@ -38,13 +38,18 @@ export default function DashboardPage() {
   // Show spinner while auth is resolving — prevents premature redirect
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center flex-col gap-3">
         <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+        <p className="text-xs text-muted-foreground">Loading your dashboard…</p>
       </div>
     );
   }
 
-  if (!user) return null;
+  if (!user) {
+    // Auth resolved but no user — redirect to login
+    window.location.href = "/login";
+    return null;
+  }
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">

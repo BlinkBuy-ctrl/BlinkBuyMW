@@ -45,32 +45,6 @@ export default function ServicesPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy] = useState("newest");
 
-  const fetchServices = async () => {
-    setLoading(true);
-    try {
-      const qp = new URLSearchParams();
-      if (search) qp.set("search", search);
-      if (category !== "All Categories") qp.set("category", category);
-      if (location !== "All Locations") qp.set("location", location);
-      if (onlineOnly) qp.set("isOnline", "true");
-      if (priceRange > 0) {
-        const range = PRICE_RANGES[priceRange];
-        if (range.min) qp.set("minPrice", String(range.min));
-        if (range.max) qp.set("maxPrice", String(range.max));
-      }
-      qp.set("sortBy", sortBy);
-      qp.set("page", String(page));
-      qp.set("limit", "12");
-
-      const data = await api.get(`/services?${qp.toString()}`);
-      setServices(data.services || []);
-      setTotal(data.total || 0);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   useEffect(() => {
     let mounted = true;
@@ -104,8 +78,7 @@ export default function ServicesPage() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    setPage(1);
-    fetchServices();
+    setPage(1); // useEffect will re-trigger with new state
   };
 
   return (

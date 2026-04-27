@@ -46,10 +46,17 @@ export default function Home() {
     let mounted = true;
     (async () => {
       try {
-        const [sData, wData] = await Promise.all([
-          api.get("/services?limit=8&sortBy=rating"),
-          api.get("/users?role=worker&limit=6&sortBy=rating"),
-        ]);
+        // Race against 10s timeout to prevent infinite loading
+        const timeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Request timed out")), 10000)
+        );
+        const [sData, wData] = await Promise.race([
+          Promise.all([
+            api.get("/services?limit=8&sortBy=rating"),
+            api.get("/users?role=worker&limit=6&sortBy=rating"),
+          ]),
+          timeout,
+        ]) as any;
         if (mounted) {
           setServices(sData.services || []);
           setWorkers(wData.users || []);
