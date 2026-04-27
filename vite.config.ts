@@ -6,14 +6,7 @@ import path from "path";
 export default defineConfig({
   base: "/",
   plugins: [
-    react({
-      // Babel optimizations: remove console.log in prod, fast refresh
-      babel: {
-        plugins: process.env.NODE_ENV === "production"
-          ? [["transform-remove-console", { exclude: ["error", "warn"] }]]
-          : [],
-      },
-    }),
+    react(),
     tailwindcss(),
   ],
   resolve: {
@@ -27,23 +20,14 @@ export default defineConfig({
     // ── Code splitting for optimal chunking ──────────────────────────────
     rollupOptions: {
       output: {
-        manualChunks: {
-          // Core framework
-          "vendor-react": ["react", "react-dom"],
-          // Routing + state
-          "vendor-query": ["@tanstack/react-query", "wouter"],
-          // Supabase (large dep)
-          "vendor-supabase": ["@supabase/supabase-js"],
-          // UI components
-          "vendor-radix": [
-            "@radix-ui/react-dialog",
-            "@radix-ui/react-dropdown-menu",
-            "@radix-ui/react-tabs",
-            "@radix-ui/react-select",
-            "@radix-ui/react-toast",
-          ],
-          // Charts/extras (lazy)
-          "vendor-charts": ["recharts"],
+        manualChunks(id) {
+          if (id.includes("node_modules")) {
+            if (id.includes("react-dom") || id.includes("/react/")) return "vendor-react";
+            if (id.includes("@tanstack") || id.includes("wouter")) return "vendor-query";
+            if (id.includes("@supabase")) return "vendor-supabase";
+            if (id.includes("recharts")) return "vendor-charts";
+            if (id.includes("@radix-ui")) return "vendor-radix";
+          }
         },
       },
     },
