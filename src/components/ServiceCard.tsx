@@ -81,7 +81,7 @@ export function ServiceCard({ service }: { service: Service }) {
 
         {/* Description */}
         {service.description && (
-          <p className="text-xs text-muted-foreground line-clamp-2 mb-3 leading-relaxed">{service.description}</p>
+          <p className="text-xs text-muted-foreground line-clamp-2 mb-3 leading-relaxed overflow-wrap-anywhere">{service.description}</p>
         )}
 
         {/* Rating */}
