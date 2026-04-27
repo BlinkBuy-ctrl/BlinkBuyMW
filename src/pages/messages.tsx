@@ -146,6 +146,39 @@ export default function MessagesPage() {
     return () => { supabase.removeChannel(channel); setOtherIsTyping(false); };
   }, [selectedConv, user]);
 
+  // Realtime: sidebar conversation list (unread counts + last message preview)
+  useEffect(() => {
+    if (!user) return;
+    const sidebarChannel = supabase
+      .channel(`user-convs:${user.id}`)
+      .on("postgres_changes", {
+        event: "INSERT", schema: "public", table: "messages",
+      }, () => {
+        // Reload conversations list on any new message
+        const load = async () => {
+          const { data } = await supabase
+            .from("conversations")
+            .select(`*, user1:profiles!conversations_user1_id_fkey(*), user2:profiles!conversations_user2_id_fkey(*), messages(id, content, sender_id, read, created_at)`)
+            .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+            .order("created_at", { ascending: false });
+          if (!data) return;
+          const enriched = (data ?? []).map((conv: any) => {
+            const other = conv.user1?.id === user.id ? conv.user2 : conv.user1;
+            const isHelpCenter = other?.email === ADMIN_EMAIL;
+            const sorted = [...(conv.messages ?? [])].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+            const lastMessage = sorted[0] ?? null;
+            const unreadCount = (conv.messages ?? []).filter((m: any) => !m.read && m.sender_id !== user.id).length;
+            return { ...conv, other, lastMessage, unreadCount, isHelpCenter };
+          });
+          enriched.sort((a: any, b: any) => { if (a.isHelpCenter) return -1; if (b.isHelpCenter) return 1; return 0; });
+          setConversations(enriched);
+        };
+        load();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(sidebarChannel); };
+  }, [user]);
+
   // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -208,7 +241,7 @@ export default function MessagesPage() {
   if (!user) return null;
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 h-[calc(100vh-120px)]">
+    <div className="max-w-5xl mx-auto px-4 py-6" style={{ height: 'calc(100dvh - 120px)' }}>
       <div className="flex h-full bg-card border border-card-border rounded-2xl overflow-hidden shadow-lg">
 
         {/* Sidebar */}
@@ -368,19 +401,21 @@ export default function MessagesPage() {
             </div>
 
             {/* Input */}
-            <div className="p-4 border-t border-border">
+            <div className="p-3 border-t border-border" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
               <div className="flex items-center gap-2">
                 <input
                   type="text" value={newMsg}
+                  inputMode="text"
                   onChange={(e) => handleTyping(e.target.value)}
+                  onFocus={() => setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 350)}
                   onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
                   placeholder={selectedConv.isHelpCenter ? "Message Otechy Help Center..." : "Type a message..."}
-                  className="flex-1 px-4 py-2.5 rounded-xl border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
+                  className="flex-1 px-4 py-3 rounded-xl border border-input bg-background text-sm outline-none focus:ring-2 focus:ring-ring"
                 />
                 <button
                   onClick={sendMessage}
                   disabled={!newMsg.trim() || sending}
-                  className="p-2.5 bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-all disabled:opacity-50"
+                  className="p-3 bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-all disabled:opacity-50 shrink-0"
                 >
                   <Send size={16} />
                 </button>
