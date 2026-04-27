@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthContext, useAuthState } from "@/hooks/useAuth";
 import Layout from "@/components/Layout";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import LoginPage from "@/pages/login";
@@ -71,16 +72,18 @@ function App() {
   const auth = useAuthState();
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthContext.Provider value={auth}>
-        <TooltipProvider>
-          <WouterRouter base="">
-            <RouterContent />
-          </WouterRouter>
-          <Toaster />
-        </TooltipProvider>
-      </AuthContext.Provider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthContext.Provider value={auth}>
+          <TooltipProvider>
+            <WouterRouter base="">
+              <RouterContent />
+            </WouterRouter>
+            <Toaster />
+          </TooltipProvider>
+        </AuthContext.Provider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 
