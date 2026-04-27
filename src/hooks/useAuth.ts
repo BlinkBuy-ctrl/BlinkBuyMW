@@ -30,12 +30,19 @@ export function useAuthState(): AuthContextType {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    // Safety timeout — if supabase hangs >8s, unblock the app
+    const safetyTimer = setTimeout(() => setIsLoading(false), 8000)
+
     // Get initial session on mount — this handles auto-login
     supabase.auth.getSession().then(async ({ data: { session } }) => {
+      clearTimeout(safetyTimer)
       setUser(session?.user ?? null)
       if (session?.user) {
         await fetchProfile(session.user.id)
       }
+      setIsLoading(false)
+    }).catch(() => {
+      clearTimeout(safetyTimer)
       setIsLoading(false)
     })
 
@@ -54,16 +61,21 @@ export function useAuthState(): AuthContextType {
 
   const fetchProfile = async (userId: string) => {
     try {
+      // Timeout after 6s to prevent hanging
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 6000)
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single()
+        .abortSignal(controller.signal)
+      clearTimeout(timer)
       if (error) throw error
       setProfile(data)
     } catch (e) {
       console.error('Failed to fetch profile:', e)
-      setProfile(null)
+      setProfile(null) // Don't block the app on profile failure
     }
   }
 
