@@ -342,3 +342,90 @@ textarea {
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 99px; }
+
+/* ══════════════════════════════════════════════════════
+   MOBILE APP OPTIMIZATIONS
+   ══════════════════════════════════════════════════════ */
+
+/* Native-feel tap highlight removal */
+* { -webkit-tap-highlight-color: transparent; }
+
+/* Prevent text selection on UI elements */
+button, a, nav { user-select: none; -webkit-user-select: none; }
+
+/* iOS safe areas for PWA standalone mode */
+body {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.safe-area-inset-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Prevent over-scroll bounce on iOS */
+html { overscroll-behavior: none; }
+
+/* Smooth scrolling everywhere */
+html { scroll-behavior: smooth; }
+
+/* ── Text overflow protection ─────────────────────────
+   Prevents long unbreakable text from crashing layout */
+p, span, div, h1, h2, h3, h4, h5, h6, li {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* Long descriptions truncate at 4 lines */
+.description-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ── Button press animations ──────────────────────────*/
+button, a[href] {
+  transition: transform 100ms ease, opacity 100ms ease;
+}
+button:active, a[href]:active {
+  transform: scale(0.97);
+  opacity: 0.85;
+}
+/* Except when explicitly told not to animate */
+.no-press:active { transform: none; opacity: 1; }
+
+/* ── Page enter animation ─────────────────────────────*/
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+main > * {
+  animation: fadeSlideIn 180ms ease both;
+}
+
+/* ── Card hover lift ──────────────────────────────────*/
+.card-lift {
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+.card-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+}
+
+/* ── Skeleton loading pulse ───────────────────────────*/
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, hsl(var(--muted)) 25%, hsl(var(--border)) 50%, hsl(var(--muted)) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 8px;
+}
+
+/* ── Bottom nav safe area ─────────────────────────────*/
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .fixed.bottom-0 {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
