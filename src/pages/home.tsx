@@ -43,19 +43,23 @@ export default function Home() {
   const [servicesLoading, setServicesLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
     (async () => {
       try {
         const [sData, wData] = await Promise.all([
           api.get("/services?limit=8&sortBy=rating"),
           api.get("/users?role=worker&limit=6&sortBy=rating"),
         ]);
-        setServices(sData.services || []);
-        setWorkers(wData.users || []);
+        if (mounted) {
+          setServices(sData.services || []);
+          setWorkers(wData.users || []);
+        }
       } catch (e: any) {
         console.error(e);
-        toast({ title: "Something went wrong", description: e.message, variant: "destructive" });
-      } finally { setServicesLoading(false); }
+        if (mounted) toast({ title: "Something went wrong", description: e.message, variant: "destructive" });
+      } finally { if (mounted) setServicesLoading(false); }
     })();
+    return () => { mounted = false; };
   }, []);
 
   const [suggestions, setSuggestions] = useState<any[]>([]);
