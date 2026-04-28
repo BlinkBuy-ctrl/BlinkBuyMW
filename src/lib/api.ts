@@ -117,7 +117,15 @@ function splitPath(url: string): { pathname: string; params: ReturnType<typeof p
 }
 
 function throwIfError(error: any) {
-  if (error) throw new Error(error.message ?? JSON.stringify(error));
+  if (!error) return;
+  // PGRST116 = no rows found — not a real error, just empty result
+  if (error.code === "PGRST116") return;
+  // RLS permission errors — log but don't crash the page
+  if (error.code === "42501" || error.message?.includes("permission denied")) {
+    console.warn("[RLS]", error.message);
+    return;
+  }
+  throw new Error(error.message ?? JSON.stringify(error));
 }
 
 // ---------------------------------------------------------------------------
@@ -153,8 +161,8 @@ async function get(url: string): Promise<any> {
       .from("services")
       .select("*, profiles(*), reviews(*)")
       .eq("id", seg[1])
-      .single();
-    throwIfError(error);
+      .maybeSingle();
+    if (error && error.code !== "PGRST116") throwIfError(error);
     return normalizeService(data);
   }
 
@@ -173,8 +181,8 @@ async function get(url: string): Promise<any> {
       .from("jobs")
       .select("*, profiles(*), applications(*)")
       .eq("id", seg[1])
-      .single();
-    throwIfError(error);
+      .maybeSingle();
+    if (error && error.code !== "PGRST116") throwIfError(error);
     return normalizeJob(data);
   }
 
@@ -193,8 +201,8 @@ async function get(url: string): Promise<any> {
       .from("marketplace_items")
       .select("*, profiles(*)")
       .eq("id", seg[1])
-      .single();
-    throwIfError(error);
+      .maybeSingle();
+    if (error && error.code !== "PGRST116") throwIfError(error);
     return normalizeItem(data);
   }
 
@@ -206,8 +214,8 @@ async function get(url: string): Promise<any> {
       .from("profiles")
       .select("rating, jobs_completed")
       .eq("id", user.id)
-      .single();
-    throwIfError(error);
+      .maybeSingle();
+    if (error && error.code !== "PGRST116") throwIfError(error);
     return data;
   }
 
@@ -235,8 +243,9 @@ async function get(url: string): Promise<any> {
       .from("profiles")
       .select("*")
       .eq("id", seg[1])
-      .single();
-    throwIfError(error);
+      .maybeSingle();
+    // maybeSingle returns null (not error) when no row found
+    if (error && error.code !== "PGRST116") throwIfError(error);
     return data;
   }
 
