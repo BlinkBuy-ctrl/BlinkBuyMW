@@ -19,25 +19,6 @@ export default function JobsPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
 
-  const fetchJobs = async () => {
-    setLoading(true);
-    try {
-      const qp = new URLSearchParams();
-      if (search) qp.set("search", search);
-      if (loc !== "All Locations") qp.set("location", loc);
-      if (jobType !== "All Types") qp.set("type", jobType);
-      qp.set("page", String(page));
-      qp.set("limit", "10");
-
-      const data = await api.get(`/jobs?${qp.toString()}`);
-      setJobs(data.jobs || []);
-      setTotal(data.total || 0);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   useEffect(() => {
     let mounted = true;
