@@ -32,7 +32,7 @@ export default defineConfig({
       },
     },
     // Compress assets
-    minify: "esbuild",
+    minify: "oxc",
     sourcemap: false,
     // Raise chunk warning limit (we're intentionally splitting)
     chunkSizeWarningLimit: 500,
