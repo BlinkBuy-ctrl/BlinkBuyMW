@@ -310,19 +310,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* ── MOBILE BOTTOM NAV (native app feel) ── */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 z-50 bg-[hsl(215,55%,10%)] border-t border-white/10 safe-area-inset-bottom">
-        <div className="flex items-center justify-around h-14 px-2">
+        <div className="flex items-center justify-around h-14 px-1">
           {BOTTOM_NAV.map(n => {
             const active = loc === n.href || (n.href !== "/" && loc.startsWith(n.href));
             return (
               <Link
                 key={n.href}
                 href={n.href}
-                className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl transition-all duration-150 active:scale-90 ${
+                className={`flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl transition-all duration-150 active:scale-90 min-w-0 flex-1 ${
                   active ? "text-blue-400" : "text-white/40 hover:text-white/70"
                 }`}
               >
                 <n.icon size={18} strokeWidth={active ? 2.5 : 1.8} />
-                <span className="text-[10px] font-medium">{n.label}</span>
+                <span className="text-[10px] font-medium whitespace-nowrap leading-none">{n.label}</span>
                 {active && <span className="w-1 h-1 rounded-full bg-blue-400 mt-0.5" />}
               </Link>
             );
@@ -330,12 +330,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           {user && (
             <Link
               href="/post-service"
-              className="flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl transition-all active:scale-90 text-white/40 hover:text-white/70"
+              className="flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl transition-all active:scale-90 text-white/40 hover:text-white/70 min-w-0 flex-1"
             >
               <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center -mt-1">
                 <Plus size={15} />
               </div>
-              <span className="text-[10px] font-medium">Post</span>
+              <span className="text-[10px] font-medium whitespace-nowrap leading-none">Post</span>
             </Link>
           )}
         </div>
