@@ -1,42 +1,52 @@
 import { useState, useEffect } from "react";
-import { Link } from "wouter";
-import { Zap, Phone, MessageCircle, MapPin, Clock, CheckCircle, AlertTriangle, Shield } from "lucide-react";
+import { useLocation } from "wouter";
+import { Zap, Phone, MessageCircle, MapPin, Clock, CheckCircle, AlertTriangle, Shield, AlertCircle } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 
 const EMERGENCY_CATEGORIES = [
-  { label: "Plumbing Emergency", icon: "🔧", desc: "Burst pipe, no water, blocked drain" },
+  { label: "Plumbing Emergency",   icon: "🔧", desc: "Burst pipe, no water, blocked drain" },
   { label: "Electrical Emergency", icon: "⚡", desc: "Power outage, sparks, broken switch" },
-  { label: "Medical Transport", icon: "🚑", desc: "Urgent hospital transport needed" },
-  { label: "Security/Guard", icon: "🛡️", desc: "Home security, night guard needed" },
-  { label: "Locksmith", icon: "🔑", desc: "Locked out of home or car" },
-  { label: "Generator Repair", icon: "🔌", desc: "Generator not starting" },
-  { label: "Roof Leak", icon: "🏠", desc: "Emergency roof repair" },
-  { label: "Other Emergency", icon: "🆘", desc: "Any other urgent help needed" },
+  { label: "Medical Transport",    icon: "🚑", desc: "Urgent hospital transport needed" },
+  { label: "Security/Guard",       icon: "🛡️", desc: "Home security, night guard needed" },
+  { label: "Locksmith",            icon: "🔑", desc: "Locked out of home or car" },
+  { label: "Generator Repair",     icon: "🔌", desc: "Generator not starting" },
+  { label: "Roof Leak",            icon: "🏠", desc: "Emergency roof repair" },
+  { label: "Other Emergency",      icon: "🆘", desc: "Any other urgent help needed" },
 ];
 
 const CITIES = ["Balaka","Blantyre","Chikwawa","Chiradzulu","Chitipa","Dedza","Dowa","Karonga","Kasungu","Likoma","Lilongwe","Machinga","Mangochi","Mchinji","Mulanje","Mwanza","Mzimba","Neno","Nkhata Bay","Nkhotakota","Nsanje","Ntcheu","Ntchisi","Phalombe","Rumphi","Salima","Thyolo","Zomba"];
 
+function friendlyError(msg: string): string {
+  if (msg.includes("row-level security") || msg.includes("violates"))
+    return "You must be logged in to send an emergency alert.";
+  if (msg.includes("timed out"))
+    return "Connection timed out. Please try again or call us directly.";
+  if (msg.includes("Not authenticated"))
+    return "Please log in to send an alert.";
+  return msg || "Failed to send alert. Please call us directly.";
+}
+
 export default function EmergencyPage() {
   const { user } = useAuth();
+  const [, setLocation] = useLocation();
   const [workers, setWorkers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState("");
-  const [location, setLocation] = useState(CITIES[0]);
+  const [location, setLocation2] = useState(CITIES[10]); // Lilongwe default
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
   const [description, setDescription] = useState("");
+  const [alertError, setAlertError] = useState("");
 
   useEffect(() => {
     const load = async () => {
       try {
         const data = await api.get("/emergency/workers");
-        // Filter to only 24/7 available workers
         const allWorkers = data.workers || [];
         const available247 = allWorkers.filter((w: any) =>
           w.availability === "24/7" || w.is_247 === true || w.available_247 === true || w.isAvailable247 === true
         );
-        // If no explicit 24/7 flag, show all (fallback for older data)
         setWorkers(available247.length > 0 ? available247 : allWorkers);
       } catch (e) {
         console.error(e);
@@ -47,7 +57,6 @@ export default function EmergencyPage() {
     load();
   }, []);
 
-  // Filter workers by selected category
   const filteredWorkers = selectedCategory
     ? workers.filter((w: any) => {
         const cat = selectedCategory.toLowerCase();
@@ -59,16 +68,34 @@ export default function EmergencyPage() {
 
   const handleSendAlert = async () => {
     if (!selectedCategory) return;
+
+    // FIX: gate on auth BEFORE attempting insert
+    if (!user) {
+      setLocation("/login");
+      return;
+    }
+
     setSending(true);
+    setAlertError("");
+
+    const localTimer = setTimeout(() => {
+      setSending(false);
+      setAlertError("Request timed out. Please call us directly at 0999626944.");
+    }, 9000);
+
     try {
       await api.post("/emergency/alert", {
         type: selectedCategory,
         location,
         description,
+        // FIX: explicitly pass user_id so RLS WITH CHECK passes even if session header lags
+        user_id: user.id,
       });
+      clearTimeout(localTimer);
       setSent(true);
     } catch (e: any) {
-      alert(e.message || "Failed to send alert. Please call directly.");
+      clearTimeout(localTimer);
+      setAlertError(friendlyError(e?.message ?? ""));
     } finally {
       setSending(false);
     }
@@ -76,7 +103,7 @@ export default function EmergencyPage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
-      {/* Emergency header */}
+      {/* Header */}
       <div className="bg-red-600 text-white rounded-2xl p-6 mb-6 text-center">
         <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
           <Zap size={28} className="text-white" />
@@ -91,30 +118,22 @@ export default function EmergencyPage() {
 
       {/* Direct contact */}
       <div className="grid grid-cols-2 gap-3 mb-6">
-        <a
-          href="tel:+265999626944"
-          className="flex items-center justify-center gap-2 bg-green-500 text-white py-4 rounded-xl font-bold hover:bg-green-600 transition-all"
-        >
+        <a href="tel:+265999626944" className="flex items-center justify-center gap-2 bg-green-500 text-white py-4 rounded-xl font-bold hover:bg-green-600 transition-all">
           <Phone size={18} /> Call Us Now
         </a>
-        <a
-          href="https://wa.me/265999626944"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2 bg-[#25D366] text-white py-4 rounded-xl font-bold hover:opacity-90 transition-all"
-        >
+        <a href="https://wa.me/265999626944" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 bg-[#25D366] text-white py-4 rounded-xl font-bold hover:opacity-90 transition-all">
           <MessageCircle size={18} /> WhatsApp
         </a>
       </div>
 
-      {/* Emergency categories */}
+      {/* Categories */}
       <div className="mb-6">
         <h2 className="text-lg font-black mb-3">What type of emergency?</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {EMERGENCY_CATEGORIES.map(cat => (
             <button
               key={cat.label}
-              onClick={() => setSelectedCategory(cat.label)}
+              onClick={() => { setSelectedCategory(cat.label); setAlertError(""); setSent(false); }}
               className={`p-3 rounded-xl border text-left transition-all ${selectedCategory === cat.label ? "border-red-500 bg-red-50 dark:bg-red-950/20" : "border-border bg-card hover:border-red-300"}`}
             >
               <div className="text-2xl mb-1">{cat.icon}</div>
@@ -125,16 +144,25 @@ export default function EmergencyPage() {
         </div>
       </div>
 
-      {/* Send alert form */}
+      {/* Alert form */}
       {selectedCategory && (
         <div className="bg-card border border-card-border rounded-xl p-5 mb-6">
           <h3 className="font-bold mb-3">Send Emergency Alert</h3>
+
+          {/* FIX: show login nudge inline instead of silent RLS crash */}
+          {!user && (
+            <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 rounded-xl px-4 py-3 mb-3 text-sm text-amber-800 dark:text-amber-200 flex items-center gap-2">
+              <AlertCircle size={14} className="shrink-0" />
+              <span>You need to <button onClick={() => setLocation("/login")} className="underline font-semibold">log in</button> to send an alert. Or call us directly.</span>
+            </div>
+          )}
+
           <div className="space-y-3">
             <div>
               <label className="text-xs font-medium mb-1 block">Your Location *</label>
               <select
                 value={location}
-                onChange={e => setLocation(e.target.value)}
+                onChange={e => setLocation2(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none"
               >
                 {CITIES.map(c => <option key={c}>{c}</option>)}
@@ -151,6 +179,14 @@ export default function EmergencyPage() {
               />
             </div>
 
+            {/* FIX: inline error banner — no more alert() */}
+            {alertError && (
+              <div className="bg-destructive/10 border border-destructive/20 text-destructive text-sm rounded-xl px-4 py-3 flex items-start gap-2">
+                <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                <span>{alertError}</span>
+              </div>
+            )}
+
             {sent ? (
               <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 rounded-xl p-4 flex items-center gap-3">
                 <CheckCircle size={20} className="text-green-600" />
@@ -162,11 +198,11 @@ export default function EmergencyPage() {
             ) : (
               <button
                 onClick={handleSendAlert}
-                disabled={sending}
+                disabled={sending || !user}
                 className="w-full bg-red-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-red-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {sending ? (
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /><span>Sending...</span></>
                 ) : (
                   <><Zap size={16} /> Send Emergency Alert</>
                 )}
@@ -176,6 +212,7 @@ export default function EmergencyPage() {
         </div>
       )}
 
+      {/* Workers list */}
       <div>
         <h2 className="text-lg font-black mb-3">
           {selectedCategory ? `${selectedCategory} Workers` : "Available Workers Now"}
@@ -227,20 +264,12 @@ export default function EmergencyPage() {
                   </div>
                   <div className="flex gap-2">
                     {worker.whatsapp && (
-                      <a
-                        href={`https://wa.me/265${worker.whatsapp.replace(/^0/, "")}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all"
-                      >
+                      <a href={`https://wa.me/265${worker.whatsapp.replace(/^0/, "")}`} target="_blank" rel="noopener noreferrer" className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all">
                         <MessageCircle size={14} />
                       </a>
                     )}
                     {worker.phone && (
-                      <a
-                        href={`tel:${worker.phone}`}
-                        className="p-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-all"
-                      >
+                      <a href={`tel:${worker.phone}`} className="p-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-all">
                         <Phone size={14} />
                       </a>
                     )}
