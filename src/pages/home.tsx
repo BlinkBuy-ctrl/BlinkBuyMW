@@ -364,19 +364,7 @@ export default function Home() {
 
         {/* ─── DUAL CTA ─── */}
         <section className="mb-10">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="relative overflow-hidden bg-primary rounded-2xl p-6 text-white">
-              <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/5" />
-              <div className="absolute -bottom-4 -left-4 w-20 h-20 rounded-full bg-white/5" />
-              <div className="relative">
-                <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center mb-4"><Shield size={22} /></div>
-                <h3 className="text-lg font-black mb-2">Are You a Worker?</h3>
-                <p className="text-sm opacity-75 mb-5 leading-relaxed">List your services for free. Get hired by thousands of customers across all 28 districts.</p>
-                <Link href="/register" className="inline-flex items-center gap-2 bg-white text-primary rounded-xl px-5 py-2.5 text-sm font-black hover:opacity-90 transition-all">
-                  Start Earning <ArrowRight size={14} />
-                </Link>
-              </div>
-            </div>
+          <div>
             <div className="relative overflow-hidden bg-[hsl(215,55%,12%)] rounded-2xl p-6 text-white border border-white/5">
               <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/5" />
               <div className="absolute -bottom-4 -left-4 w-20 h-20 rounded-full bg-white/5" />
