@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext } from 'react'
+import { useState, useEffect, createContext, useContext, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { User } from '@supabase/supabase-js'
 
@@ -29,11 +29,44 @@ export function useAuthState(): AuthContextType {
   const [profile, setProfile] = useState<any | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
+  // FIX 1: Track last fetched userId — skip re-fetch if same user
+  const lastFetchedUserId = useRef<string | null>(null)
+  // FIX 2: Prevent concurrent fetches
+  const isFetchingRef = useRef(false)
+
+  const fetchProfile = async (userId: string, force = false) => {
+    // Skip if same user already fetched and not forced
+    if (!force && lastFetchedUserId.current === userId) return
+    // Skip if already in-flight
+    if (isFetchingRef.current) return
+
+    isFetchingRef.current = true
+    try {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 6000)
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single()
+        .abortSignal(controller.signal)
+      clearTimeout(timer)
+
+      if (error) throw error
+      lastFetchedUserId.current = userId
+      setProfile(data)
+    } catch (e) {
+      console.error('Failed to fetch profile:', e)
+      // FIX 3: Only null profile if we have no profile yet — don't wipe existing one
+      setProfile(prev => prev ?? null)
+    } finally {
+      isFetchingRef.current = false
+    }
+  }
+
   useEffect(() => {
-    // Safety timeout — if supabase hangs >8s, unblock the app
     const safetyTimer = setTimeout(() => setIsLoading(false), 8000)
 
-    // Get initial session on mount — this handles auto-login
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       clearTimeout(safetyTimer)
       setUser(session?.user ?? null)
@@ -46,38 +79,26 @@ export function useAuthState(): AuthContextType {
       setIsLoading(false)
     })
 
-    // Listen for auth state changes (login, logout, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user ?? null)
+
       if (session?.user) {
-        await fetchProfile(session.user.id)
+        // FIX 4: Only fetch on real login/signup events, not token refreshes
+        if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+          await fetchProfile(session.user.id)
+        } else if (event === 'TOKEN_REFRESHED') {
+          // Token refresh — just update user, don't re-fetch profile
+          setUser(session.user)
+        }
       } else {
+        // FIX 5: Clear cache on logout
+        lastFetchedUserId.current = null
         setProfile(null)
       }
     })
 
     return () => subscription.unsubscribe()
   }, [])
-
-  const fetchProfile = async (userId: string) => {
-    try {
-      // Timeout after 6s to prevent hanging
-      const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), 6000)
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single()
-        .abortSignal(controller.signal)
-      clearTimeout(timer)
-      if (error) throw error
-      setProfile(data)
-    } catch (e) {
-      console.error('Failed to fetch profile:', e)
-      setProfile(null) // Don't block the app on profile failure
-    }
-  }
 
   const login = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -99,7 +120,6 @@ export function useAuthState(): AuthContextType {
     })
     if (error) throw new Error(error.message)
 
-    // Auto sign-in if email confirmation is disabled
     if (signUpData.user && !signUpData.session) {
       const { error: loginError } = await supabase.auth.signInWithPassword({
         email: data.email,
@@ -111,6 +131,7 @@ export function useAuthState(): AuthContextType {
 
   const logout = async () => {
     await supabase.auth.signOut()
+    lastFetchedUserId.current = null
     setProfile(null)
   }
 
