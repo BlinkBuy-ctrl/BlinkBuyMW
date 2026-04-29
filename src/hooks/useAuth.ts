@@ -24,20 +24,28 @@ export interface RegisterData {
 
 export const AuthContext = createContext<AuthContextType>({} as AuthContextType)
 
+function normalizeProfile(data: Record<string, unknown>): Record<string, unknown> {
+  const normalized: Record<string, unknown> = {}
+  for (const key in data) {
+    const camel = key.replace(/_([a-z])/g, (_, l: string) => l.toUpperCase())
+    normalized[camel] = data[key]
+  }
+  if (typeof normalized.totalViews === 'undefined' || normalized.totalViews === null) {
+    normalized.totalViews = 0
+  }
+  return normalized
+}
+
 export function useAuthState(): AuthContextType {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<any | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // FIX 1: Track last fetched userId — skip re-fetch if same user
   const lastFetchedUserId = useRef<string | null>(null)
-  // FIX 2: Prevent concurrent fetches
   const isFetchingRef = useRef(false)
 
   const fetchProfile = async (userId: string, force = false) => {
-    // Skip if same user already fetched and not forced
     if (!force && lastFetchedUserId.current === userId) return
-    // Skip if already in-flight
     if (isFetchingRef.current) return
 
     isFetchingRef.current = true
@@ -54,11 +62,10 @@ export function useAuthState(): AuthContextType {
 
       if (error) throw error
       lastFetchedUserId.current = userId
-      setProfile(data)
+      setProfile(normalizeProfile(data as Record<string, unknown>))
     } catch (e) {
       console.error('Failed to fetch profile:', e)
-      // FIX 3: Only null profile if we have no profile yet — don't wipe existing one
-      setProfile(prev => prev ?? null)
+      setProfile((prev: any) => prev ?? null)
     } finally {
       isFetchingRef.current = false
     }
@@ -83,15 +90,12 @@ export function useAuthState(): AuthContextType {
       setUser(session?.user ?? null)
 
       if (session?.user) {
-        // FIX 4: Only fetch on real login/signup events, not token refreshes
         if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
           await fetchProfile(session.user.id)
         } else if (event === 'TOKEN_REFRESHED') {
-          // Token refresh — just update user, don't re-fetch profile
           setUser(session.user)
         }
       } else {
-        // FIX 5: Clear cache on logout
         lastFetchedUserId.current = null
         setProfile(null)
       }
