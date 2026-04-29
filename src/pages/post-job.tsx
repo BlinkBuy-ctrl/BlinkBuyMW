@@ -1,11 +1,20 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Plus } from "lucide-react";
+import { Plus, AlertCircle } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 
 const CITIES = ["Balaka","Blantyre","Chikwawa","Chiradzulu","Chitipa","Dedza","Dowa","Karonga","Kasungu","Likoma","Lilongwe","Machinga","Mangochi","Mchinji","Mulanje","Mwanza","Mzimba","Neno","Nkhata Bay","Nkhotakota","Nsanje","Ntcheu","Ntchisi","Phalombe","Rumphi","Salima","Thyolo","Zomba"];
 const JOB_TYPES = ["Full-time", "Part-time", "Contract", "Freelance", "One-time Task"];
+
+// Maps timeout/network errors to user-friendly messages
+function friendlyError(msg: string): string {
+  if (msg.includes("timed out"))      return "Connection timed out. Please check your internet and try again.";
+  if (msg.includes("Not authenticated")) return "Your session expired. Please log in again.";
+  if (msg.includes("permission denied")) return "You don't have permission to post jobs. Please contact support.";
+  if (msg.includes("network") || msg.includes("fetch")) return "Network error. Please check your connection.";
+  return msg || "Something went wrong. Please try again.";
+}
 
 export default function PostJobPage() {
   const { user, isLoading: authLoading } = useAuth();
@@ -28,8 +37,16 @@ export default function PostJobPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) { setLocation("/login"); return; }
+
     setLoading(true);
     setError("");
+
+    // Local timeout — if api.post somehow leaks past withTimeout, this catches it
+    const localTimer = setTimeout(() => {
+      setLoading(false);
+      setError("Request took too long. Please try again.");
+    }, 9000);
+
     try {
       const { isUrgent, ...rest } = form;
       const payload = {
@@ -39,10 +56,13 @@ export default function PostJobPage() {
         skills: form.skills ? form.skills.split(",").map(s => s.trim()).filter(Boolean) : [],
       };
       await api.post("/jobs", payload);
+      clearTimeout(localTimer);
       setLocation("/jobs");
     } catch (e: any) {
-      setError(e.message || "Failed to post job");
+      clearTimeout(localTimer);
+      setError(friendlyError(e?.message ?? ""));
     } finally {
+      // Always unblock the button — no infinite spin
       setLoading(false);
     }
   };
@@ -63,8 +83,9 @@ export default function PostJobPage() {
       <p className="text-muted-foreground text-sm mb-6">Describe what you need and get applications from skilled workers</p>
 
       {error && (
-        <div className="bg-destructive/10 border border-destructive/20 text-destructive text-sm rounded-xl px-4 py-3 mb-4">
-          {error}
+        <div className="bg-destructive/10 border border-destructive/20 text-destructive text-sm rounded-xl px-4 py-3 mb-4 flex items-start gap-2">
+          <AlertCircle size={15} className="mt-0.5 shrink-0" />
+          <span>{error}</span>
         </div>
       )}
 
@@ -165,7 +186,10 @@ export default function PostJobPage() {
           className="w-full bg-primary text-primary-foreground py-3 rounded-xl font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
         >
           {loading ? (
-            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            <>
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <span>Posting...</span>
+            </>
           ) : (
             <><Plus size={16} /> Post Job</>
           )}
