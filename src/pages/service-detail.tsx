@@ -63,7 +63,7 @@ export default function ServiceDetailPage() {
         .from("bookings")
         .insert({
           service_id: id,
-          user_id: user.id,
+          customer_id: user.id,
           message: bookingMsg,
           status: "pending",
         });
