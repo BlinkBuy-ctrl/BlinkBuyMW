@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useSearch } from "wouter";
-import { Search, Filter, MapPin, Star, ChevronDown, SlidersHorizontal, X } from "lucide-react";
+import { Search, MapPin, Star, SlidersHorizontal, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { ServiceCard } from "@/components/ServiceCard";
 import { formatMK } from "@/lib/auth";
@@ -18,7 +18,12 @@ const CATEGORIES = [
   "Emergency & Quick Help",
 ];
 
-const CITIES = ["All Locations","Balaka","Blantyre","Chikwawa","Chiradzulu","Chitipa","Dedza","Dowa","Karonga","Kasungu","Likoma","Lilongwe","Machinga","Mangochi","Mchinji","Mulanje","Mwanza","Mzimba","Neno","Nkhata Bay","Nkhotakota","Nsanje","Ntcheu","Ntchisi","Phalombe","Rumphi","Salima","Thyolo","Zomba"];
+const CITIES = [
+  "All Locations","Balaka","Blantyre","Chikwawa","Chiradzulu","Chitipa","Dedza","Dowa",
+  "Karonga","Kasungu","Likoma","Lilongwe","Machinga","Mangochi","Mchinji","Mulanje",
+  "Mwanza","Mzimba","Neno","Nkhata Bay","Nkhotakota","Nsanje","Ntcheu","Ntchisi",
+  "Phalombe","Rumphi","Salima","Thyolo","Zomba",
+];
 
 const PRICE_RANGES = [
   { label: "Any Price", min: 0, max: 0 },
@@ -45,6 +50,28 @@ export default function ServicesPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy] = useState("newest");
 
+  // Reset page to 1 whenever any filter changes (not when page itself changes)
+  const isFirstRender = useRef(true);
+  const prevFilters = useRef({ search, category, location, priceRange, onlineOnly, sortBy });
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    const prev = prevFilters.current;
+    if (
+      prev.search !== search ||
+      prev.category !== category ||
+      prev.location !== location ||
+      prev.priceRange !== priceRange ||
+      prev.onlineOnly !== onlineOnly ||
+      prev.sortBy !== sortBy
+    ) {
+      prevFilters.current = { search, category, location, priceRange, onlineOnly, sortBy };
+      setPage(1);
+    }
+  }, [search, category, location, priceRange, onlineOnly, sortBy]);
 
   useEffect(() => {
     let mounted = true;
@@ -65,9 +92,16 @@ export default function ServicesPage() {
         qp.set("page", String(page));
         qp.set("limit", "12");
         const data = await api.get(`/services?${qp.toString()}`);
-        if (mounted) { setServices(data.services || []); setTotal(data.total || 0); }
+        if (mounted) {
+          setServices(data.services || []);
+          setTotal(data.total || 0);
+        }
       } catch (e) {
         console.error(e);
+        if (mounted) {
+          setServices([]);
+          setTotal(0);
+        }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -78,7 +112,8 @@ export default function ServicesPage() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    setPage(1); // useEffect will re-trigger with new state
+    setPage(1);
+    // useEffect re-triggers automatically via state deps
   };
 
   return (
@@ -100,7 +135,11 @@ export default function ServicesPage() {
               placeholder="Search services..."
               className="flex-1 text-sm outline-none bg-transparent"
             />
-            {search && <button type="button" onClick={() => setSearch("")}><X size={14} className="text-muted-foreground" /></button>}
+            {search && (
+              <button type="button" onClick={() => setSearch("")}>
+                <X size={14} className="text-muted-foreground" />
+              </button>
+            )}
           </div>
           <select
             value={category}
@@ -116,7 +155,10 @@ export default function ServicesPage() {
           >
             {CITIES.map(c => <option key={c}>{c}</option>)}
           </select>
-          <button type="submit" className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-all">
+          <button
+            type="submit"
+            className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-all"
+          >
             Search
           </button>
         </form>

@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { Search, MapPin, Clock, Briefcase, DollarSign, Filter, X, ChevronRight } from "lucide-react";
+import { Search, MapPin, Clock, Briefcase, DollarSign, ChevronRight } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { formatMK } from "@/lib/auth";
@@ -19,6 +19,21 @@ export default function JobsPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
 
+  // Reset page to 1 whenever filters change (not when page itself changes)
+  const isFirstRender = useRef(true);
+  const prevFilters = useRef({ search, loc, jobType });
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    const prev = prevFilters.current;
+    if (prev.search !== search || prev.loc !== loc || prev.jobType !== jobType) {
+      prevFilters.current = { search, loc, jobType };
+      setPage(1);
+    }
+  }, [search, loc, jobType]);
 
   useEffect(() => {
     let mounted = true;
@@ -32,9 +47,16 @@ export default function JobsPage() {
         qp.set("page", String(page));
         qp.set("limit", "10");
         const data = await api.get(`/jobs?${qp.toString()}`);
-        if (mounted) { setJobs(data.jobs || []); setTotal(data.total || 0); }
+        if (mounted) {
+          setJobs(data.jobs || []);
+          setTotal(data.total || 0);
+        }
       } catch (e) {
         console.error(e);
+        if (mounted) {
+          setJobs([]);
+          setTotal(0);
+        }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -43,7 +65,11 @@ export default function JobsPage() {
     return () => { mounted = false; };
   }, [search, loc, jobType, page]);
 
-  const handleSearch = (e: React.FormEvent) => { e.preventDefault(); setPage(1); fetchJobs(); };
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPage(1);
+    // useEffect re-triggers automatically via state deps
+  };
 
   const getTimeAgo = (date: string) => {
     const diff = Date.now() - new Date(date).getTime();
@@ -83,13 +109,24 @@ export default function JobsPage() {
               className="flex-1 text-sm outline-none bg-transparent"
             />
           </div>
-          <select value={loc} onChange={e => setLoc(e.target.value)} className="px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none sm:w-36">
+          <select
+            value={loc}
+            onChange={e => setLoc(e.target.value)}
+            className="px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none sm:w-36"
+          >
             {CITIES.map(c => <option key={c}>{c}</option>)}
           </select>
-          <select value={jobType} onChange={e => setJobType(e.target.value)} className="px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none sm:w-36">
+          <select
+            value={jobType}
+            onChange={e => setJobType(e.target.value)}
+            className="px-3 py-2 rounded-lg border border-input bg-background text-sm outline-none sm:w-36"
+          >
             {JOB_TYPES.map(t => <option key={t}>{t}</option>)}
           </select>
-          <button type="submit" className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-all">
+          <button
+            type="submit"
+            className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition-all"
+          >
             Search
           </button>
         </div>
@@ -112,7 +149,10 @@ export default function JobsPage() {
           <h3 className="text-lg font-bold mb-1">No jobs found</h3>
           <p className="text-muted-foreground text-sm mb-4">Be the first to post a job!</p>
           {user && (
-            <Link href="/post-job" className="bg-primary text-primary-foreground px-6 py-2.5 rounded-xl text-sm font-bold hover:opacity-90 transition-all">
+            <Link
+              href="/post-job"
+              className="bg-primary text-primary-foreground px-6 py-2.5 rounded-xl text-sm font-bold hover:opacity-90 transition-all"
+            >
               Post a Job
             </Link>
           )}
@@ -126,13 +166,21 @@ export default function JobsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="font-bold text-foreground">{job.title}</h3>
-                      {job.isUrgent && <span className="bg-red-100 text-red-600 text-xs px-2 py-0.5 rounded-full font-semibold">Urgent</span>}
+                      {job.isUrgent && (
+                        <span className="bg-red-100 text-red-600 text-xs px-2 py-0.5 rounded-full font-semibold">
+                          Urgent
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{job.description}</p>
                     <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                       <div className="flex items-center gap-1"><MapPin size={11} />{job.location}</div>
                       <div className="flex items-center gap-1"><Briefcase size={11} />{job.type || "Any type"}</div>
-                      {job.budget && <div className="flex items-center gap-1 text-primary font-semibold"><DollarSign size={11} />{formatMK(job.budget)}</div>}
+                      {job.budget && (
+                        <div className="flex items-center gap-1 text-primary font-semibold">
+                          <DollarSign size={11} />{formatMK(job.budget)}
+                        </div>
+                      )}
                       <div className="flex items-center gap-1"><Clock size={11} />{getTimeAgo(job.createdAt)}</div>
                     </div>
                   </div>
@@ -149,9 +197,23 @@ export default function JobsPage() {
 
       {total > 10 && (
         <div className="flex justify-center gap-2 mt-6">
-          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted disabled:opacity-40">Previous</button>
-          <span className="px-4 py-2 text-sm text-muted-foreground">Page {page} of {Math.ceil(total / 10)}</span>
-          <button onClick={() => setPage(p => p + 1)} disabled={page >= Math.ceil(total / 10)} className="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted disabled:opacity-40">Next</button>
+          <button
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted disabled:opacity-40"
+          >
+            Previous
+          </button>
+          <span className="px-4 py-2 text-sm text-muted-foreground">
+            Page {page} of {Math.ceil(total / 10)}
+          </span>
+          <button
+            onClick={() => setPage(p => p + 1)}
+            disabled={page >= Math.ceil(total / 10)}
+            className="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted disabled:opacity-40"
+          >
+            Next
+          </button>
         </div>
       )}
     </div>
