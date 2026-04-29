@@ -102,23 +102,46 @@ export async function getOrCreateConversation(otherUserId: string): Promise<stri
 function parseParams(search: string) {
   const p = new URLSearchParams(search);
   return {
+    // existing
     limit: p.get("limit") ? Number(p.get("limit")) : null,
     sortBy: p.get("sortBy"),
     category: p.get("category"),
     location: p.get("location"),
     search: p.get("search"),
     workerId: p.get("workerId"),
+    // FIX (1): added missing params
+    page: p.get("page") ? Number(p.get("page")) : null,
+    // p.get() returns null when key is absent — must use p.has() to distinguish absent vs "false"
+    isOnline: p.has("isOnline") ? p.get("isOnline") === "true" : null,
+    minPrice: p.get("minPrice") ? Number(p.get("minPrice")) : null,
+    maxPrice: p.get("maxPrice") ? Number(p.get("maxPrice")) : null,
   };
 }
-function applyFilters(query: any, params: ReturnType<typeof parseParams>) {
+
+function applyFilters(query: any, params: ReturnType<typeof parseParams>, skipPagination = false) {
   if (params.category) query = query.eq("category", params.category);
   if (params.location) query = query.ilike("location", `%${params.location}%`);
   if (params.search) query = query.ilike("title", `%${params.search}%`);
   if (params.workerId) query = query.eq("worker_id", params.workerId);
   if (params.sortBy === "rating") query = query.order("rating", { ascending: false });
-  if (params.limit) query = query.limit(params.limit);
+
+  // FIX (2): apply new filters
+  if (params.isOnline !== null) query = query.eq("is_online", params.isOnline);
+  if (params.minPrice !== null && !isNaN(params.minPrice)) query = query.gte("price", params.minPrice);
+  if (params.maxPrice !== null && !isNaN(params.maxPrice)) query = query.lte("price", params.maxPrice);
+
+  // Pagination — skipped for detail/single-row routes to avoid Vercel 400 errors
+  if (!skipPagination) {
+    const pageSize = (params.limit && !isNaN(params.limit)) ? params.limit : 20;
+    const page = (params.page && !isNaN(params.page) && params.page > 0) ? params.page : 1;
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+    query = query.range(from, to);
+  }
+
   return query;
 }
+
 function splitPath(url: string): { pathname: string; params: ReturnType<typeof parseParams> } {
   const [pathname, qs = ""] = url.split("?");
   return { pathname: pathname.replace(/\/$/, ""), params: parseParams(qs) };
@@ -141,16 +164,17 @@ async function get(url: string): Promise<any> {
   const seg = pathname.split("/").filter(Boolean);
 
   if (seg[0] === "services" && seg.length === 1) {
-    let q = supabase.from("services").select("*, profiles(*)");
+    // FIX (3): add { count: "exact" } and return total
+    let q = supabase.from("services").select("*, profiles(*)", { count: "exact" });
     q = applyFilters(q, params);
     q = q.order("is_boosted", { ascending: false }).order("created_at", { ascending: false });
-    const { data, error } = await q;
+    const { data, error, count } = await q;
     throwIfError(error);
-    return { services: (data ?? []).map(normalizeService) };
+    return { services: (data ?? []).map(normalizeService), total: count ?? 0 };
   }
   if (seg[0] === "services" && seg[2] === "reviews") {
     let q = supabase.from("reviews").select("*, profiles(*)").eq("service_id", seg[1]);
-    q = applyFilters(q, params);
+    q = applyFilters(q, params, true); // skip pagination for sub-resource
     const { data, error } = await q;
     throwIfError(error);
     return (data ?? []).map(normalizeReview);
@@ -192,7 +216,7 @@ async function get(url: string): Promise<any> {
   }
   if (seg[0] === "users" && seg[2] === "reviews") {
     let q = supabase.from("reviews").select("*, profiles(*)").eq("worker_id", seg[1]);
-    q = applyFilters(q, params);
+    q = applyFilters(q, params, true); // skip pagination for sub-resource
     const { data, error } = await q;
     throwIfError(error);
     return data ?? [];
@@ -215,6 +239,16 @@ async function get(url: string): Promise<any> {
     const { data, error } = await q;
     throwIfError(error);
     return { workers: data ?? [] };
+  }
+  // FIX (4): /emergency/workers route
+  if (seg[0] === "emergency" && seg[1] === "workers") {
+    let q = supabase.from("profiles").select("*").in("role", ["worker", "both"]);
+    if (params.isOnline !== null) q = q.eq("is_online", params.isOnline);
+    if (params.location) q = q.ilike("location", `%${params.location}%`);
+    if (params.category) q = q.eq("category", params.category);
+    const { data, error } = await q;
+    throwIfError(error);
+    return { workers: (data ?? []).map(normalizeWorker) };
   }
   if (seg[0] === "admin" && seg[1] === "stats") {
     const [profiles, services, jobs] = await Promise.all([
