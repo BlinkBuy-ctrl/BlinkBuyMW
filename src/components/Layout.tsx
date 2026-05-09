@@ -46,7 +46,7 @@ const NavItem = memo(({ n, active }: { n: typeof NAV[0]; active: boolean }) => (
 ));
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const { user, profile, logout } = useAuth();
+  const { user, profile, isLoading, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { isInstallable, install } = usePWA();
   const [, setLocation] = useLocation();
@@ -92,6 +92,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     setShowInstallBanner(false);
     sessionStorage.setItem("pwa_banner_dismissed", "1");
   };
+
+  // ── Avatar helper: uses camelCase profilePhoto (normalizer converts it) ──
+  const avatarLetter = profile?.name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || "?";
+  const avatarPhoto = profile?.profilePhoto ?? profile?.profile_photo ?? null;
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
@@ -184,12 +188,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 rounded-xl px-2.5 py-1.5 transition-all border border-white/10 active:scale-95"
                     >
                       <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[hsl(210,100%,60%)] to-[hsl(210,100%,40%)] flex items-center justify-center text-xs font-black text-white overflow-hidden">
-                        {profile?.profile_photo
-                          ? <img src={profile.profile_photo} alt="" className="w-full h-full object-cover" />
-                          : profile?.name?.charAt(0).toUpperCase() || "?"}
+                        {/* FIX: use avatarPhoto (camelCase) and show spinner while loading */}
+                        {isLoading ? (
+                          <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : avatarPhoto ? (
+                          <img src={avatarPhoto} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          avatarLetter
+                        )}
                       </div>
                       <span className="text-xs hidden sm:block max-w-[80px] truncate font-medium">
-                        {profile?.name?.split(" ")[0]}
+                        {profile?.name?.split(" ")[0] || user.email?.split("@")[0]}
                       </span>
                       <ChevronDown size={11} className={`transition-transform duration-150 ${uMenu ? "rotate-180" : ""}`} />
                     </button>
