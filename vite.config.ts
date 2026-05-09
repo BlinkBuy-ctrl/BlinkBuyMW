@@ -17,7 +17,6 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, "dist"),
     emptyOutDir: true,
-    // ── Code splitting for optimal chunking ──────────────────────────────
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -31,13 +30,10 @@ export default defineConfig({
         },
       },
     },
-    // Compress assets
-    minify: "oxc",
+    minify: "esbuild",
     sourcemap: false,
-    // Raise chunk warning limit (we're intentionally splitting)
     chunkSizeWarningLimit: 500,
   },
-  // Enable optimized dependency pre-bundling
   optimizeDeps: {
     include: [
       "react",
