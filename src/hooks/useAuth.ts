@@ -93,7 +93,9 @@ export function useAuthState(): AuthContextType {
         if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
           await fetchProfile(session.user.id)
         } else if (event === 'TOKEN_REFRESHED') {
+          // FIX: also re-fetch profile on token refresh so it never goes null
           setUser(session.user)
+          await fetchProfile(session.user.id, true)
         }
       } else {
         lastFetchedUserId.current = null
