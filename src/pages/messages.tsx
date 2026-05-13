@@ -107,7 +107,7 @@ function Avatar({
 }
 
 export default function MessagesPage() {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const [conversations, setConversations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -185,13 +185,15 @@ export default function MessagesPage() {
   };
 
   useEffect(() => {
+    // FIX: wait for auth to finish rehydrating before acting on user=null
+    if (authLoading) return;
     if (!user) {
       setLocation("/login");
       return;
     }
     loadConversations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, authLoading]);
 
   useEffect(() => {
     if (selectedConv) loadMessages(selectedConv.id);
@@ -306,6 +308,13 @@ export default function MessagesPage() {
 
   const getDisplayName = (conv: any) =>
     conv.isHelpCenter ? "Otechy Help Center" : (conv.other?.name ?? "Unknown");
+
+  // FIX: show spinner while auth rehydrates, not a blank/null screen
+  if (authLoading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+    </div>
+  );
 
   if (!user) return null;
 

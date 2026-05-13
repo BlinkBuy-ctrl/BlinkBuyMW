@@ -9,7 +9,7 @@ import { ServiceCard } from "@/components/ServiceCard";
 
 export default function ProfilePage() {
   const { id } = useParams();
-  const { user, profile: authProfile } = useAuth();
+  const { user, profile: authProfile, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const [profile, setProfile] = useState<any>(null);
   const [services, setServices] = useState<any[]>([]);
@@ -61,7 +61,7 @@ export default function ProfilePage() {
       }
     };
     if (id) load();
-  }, [id, isOwnProfile, user, authProfile]);
+  }, [id, isOwnProfile, user, authProfile, authLoading]);
 
   if (loading) {
     return (

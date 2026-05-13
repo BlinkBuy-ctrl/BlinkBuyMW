@@ -5,12 +5,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
 
 export default function NotificationsPage() {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (authLoading) return;
     if (!user) { setLocation("/login"); return; }
     let mounted = true;
     loadNotifications(mounted);
@@ -27,7 +28,7 @@ export default function NotificationsPage() {
       .subscribe();
 
     return () => { mounted = false; supabase.removeChannel(channel); };
-  }, [user]);
+  }, [user, authLoading]);
 
   const loadNotifications = async (mounted: boolean) => {
     try {
@@ -79,6 +80,12 @@ export default function NotificationsPage() {
     };
     return icons[type] || "🔔";
   };
+
+  if (authLoading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+    </div>
+  );
 
   if (!user) return null;
 
