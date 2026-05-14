@@ -1,14 +1,31 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Briefcase, Star, MessageCircle, Bell, Plus, Eye, CheckCircle } from "lucide-react";
+import { Briefcase, Star, MessageCircle, Bell, Plus, Eye, CheckCircle, TrendingUp } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { ServiceCard } from "@/components/ServiceCard";
 
+// Tiny sparkline SVG — no deps
+function Sparkline({ data, color = "#6366f1" }: { data: number[]; color?: string }) {
+  if (!data || data.length < 2) return null;
+  const max = Math.max(...data, 1);
+  const w = 80, h = 28, pad = 2;
+  const pts = data.map((v, i) => {
+    const x = pad + (i / (data.length - 1)) * (w - pad * 2);
+    const y = h - pad - (v / max) * (h - pad * 2);
+    return `${x},${y}`;
+  }).join(" ");
+  return (
+    <svg width={w} height={h} className="opacity-70">
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export default function DashboardPage() {
   const { user, profile, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
-  const [stats, setStats] = useState<Record<string, unknown>>({});
+  const [stats, setStats] = useState<Record<string, any>>({});
   const [myServices, setMyServices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -24,11 +41,11 @@ export default function DashboardPage() {
           api.get(`/services?workerId=${user.id}&limit=10`).catch(() => ({ services: [] })),
         ]);
         if (mounted) {
-          setStats((statsData as Record<string, unknown>) ?? {});
+          setStats((statsData as Record<string, any>) ?? {});
           setMyServices((servicesData as { services?: any[] }).services ?? []);
         }
       } catch {
-        // Fail gracefully — stats stay as empty object, services stay as []
+        // Fail gracefully
       } finally {
         if (mounted) setLoading(false);
       }
@@ -46,25 +63,12 @@ export default function DashboardPage() {
     );
   }
 
-  if (!user) {
-    window.location.href = "/login";
-    return null;
-  }
+  if (!user) { window.location.href = "/login"; return null; }
 
-  // Derived stat values — all with safe fallbacks to 0 / "0.0"
-  const jobsCompleted =
-    (stats?.jobs_completed as number) ??
-    (profile?.jobs_completed as number) ??
-    0;
-
-  const rating = (
-    (stats?.rating as number) ??
-    (profile?.rating as number) ??
-    0
-  ).toFixed(1);
-
+  const jobsCompleted = (stats?.jobs_completed as number) ?? (profile?.jobs_completed as number) ?? 0;
+  const rating = ((stats?.rating as number) ?? (profile?.rating as number) ?? 0).toFixed(1);
   const totalViews = (stats?.totalViews as number) ?? 0;
-
+  const sparkline: Record<string, number[]> = stats?.viewsSparkline ?? {};
   const activeServices = myServices.length;
 
   return (
@@ -77,23 +81,21 @@ export default function DashboardPage() {
             Welcome back, {(profile?.name as string)?.split(" ")[0] ?? "there"}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Link
-            href="/post-service"
-            className="bg-primary text-primary-foreground px-4 py-2.5 rounded-xl text-sm font-bold hover:opacity-90 transition-all flex items-center gap-1.5"
-          >
-            <Plus size={14} /> New Service
-          </Link>
-        </div>
+        <Link
+          href="/post-service"
+          className="bg-primary text-primary-foreground px-4 py-2.5 rounded-xl text-sm font-bold hover:opacity-90 transition-all flex items-center gap-1.5"
+        >
+          <Plus size={14} /> New Service
+        </Link>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         {[
-          { label: "Total Views",      value: totalViews,      icon: Eye,         color: "text-blue-600"   },
-          { label: "Jobs Completed",   value: jobsCompleted,   icon: CheckCircle, color: "text-green-600"  },
-          { label: "Avg Rating",       value: rating,          icon: Star,        color: "text-amber-600"  },
-          { label: "Active Services",  value: activeServices,  icon: Briefcase,   color: "text-purple-600" },
+          { label: "Total Views",     value: totalViews,     icon: Eye,         color: "text-blue-600"   },
+          { label: "Jobs Completed",  value: jobsCompleted,  icon: CheckCircle, color: "text-green-600"  },
+          { label: "Avg Rating",      value: rating,         icon: Star,        color: "text-amber-600"  },
+          { label: "Active Services", value: activeServices, icon: Briefcase,   color: "text-purple-600" },
         ].map(s => (
           <div key={s.label} className="bg-card border border-card-border rounded-xl p-4">
             <s.icon size={18} className={`${s.color} mb-2`} />
@@ -109,10 +111,7 @@ export default function DashboardPage() {
           <div className="font-bold text-sm mb-1">Complete your profile to get more bookings</div>
           <p className="text-xs text-muted-foreground">A complete profile with photo and bio gets 3x more views</p>
         </div>
-        <Link
-          href="/settings"
-          className="text-xs bg-primary text-primary-foreground px-3 py-1.5 rounded-lg hover:opacity-90 transition-all whitespace-nowrap"
-        >
+        <Link href="/settings" className="text-xs bg-primary text-primary-foreground px-3 py-1.5 rounded-lg hover:opacity-90 transition-all whitespace-nowrap">
           Update Profile
         </Link>
       </div>
@@ -137,16 +136,28 @@ export default function DashboardPage() {
             <Briefcase size={32} className="text-muted-foreground mx-auto mb-3 opacity-30" />
             <h3 className="font-bold mb-1">No services listed yet</h3>
             <p className="text-sm text-muted-foreground mb-4">Start earning by listing your skills</p>
-            <Link
-              href="/post-service"
-              className="bg-primary text-primary-foreground px-5 py-2 rounded-xl text-sm font-bold hover:opacity-90 transition-all"
-            >
+            <Link href="/post-service" className="bg-primary text-primary-foreground px-5 py-2 rounded-xl text-sm font-bold hover:opacity-90 transition-all">
               Post Your First Service
             </Link>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {myServices.map(s => <ServiceCard key={s.id} service={s} />)}
+            {myServices.map(s => (
+              <div key={s.id} className="relative">
+                <ServiceCard service={s} />
+                {/* Views sparkline overlay */}
+                {sparkline[s.id] && (
+                  <div className="absolute bottom-3 right-3 flex items-center gap-1.5 bg-background/80 backdrop-blur-sm border border-border rounded-lg px-2 py-1">
+                    <TrendingUp size={11} className="text-blue-500" />
+                    <Sparkline data={sparkline[s.id]} color="#3b82f6" />
+                    <span className="text-xs font-semibold text-blue-600">
+                      {sparkline[s.id].reduce((a, b) => a + b, 0)}
+                    </span>
+                    <span className="text-xs text-muted-foreground">7d</span>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -154,10 +165,10 @@ export default function DashboardPage() {
       {/* Quick links */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "Messages",      href: "/messages",          icon: MessageCircle },
-          { label: "Notifications", href: "/notifications",     icon: Bell          },
-          { label: "Browse Jobs",   href: "/jobs",              icon: Briefcase     },
-          { label: "My Profile",    href: `/profile/${user.id}`, icon: Eye          },
+          { label: "Messages",      href: "/messages",           icon: MessageCircle },
+          { label: "Notifications", href: "/notifications",      icon: Bell          },
+          { label: "Browse Jobs",   href: "/jobs",               icon: Briefcase     },
+          { label: "My Profile",    href: `/profile/${user.id}`, icon: Eye           },
         ].map(l => (
           <Link
             key={l.label}
