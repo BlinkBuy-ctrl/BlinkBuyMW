@@ -4,6 +4,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
 import { usePWA } from "@/hooks/usePWA";
 import { getLanguage, setLanguage } from "@/lib/auth";
+import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
+import { supabase } from "@/lib/supabase";
 import {
   Home, Briefcase, Truck, UtensilsCrossed, GraduationCap,
   ShoppingBag, Heart, Monitor, Zap, MessageCircle, Bell,
@@ -56,6 +58,33 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [lang, setLang] = useState<"en" | "ny">(getLanguage());
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [pageVisible, setPageVisible] = useState(true);
+  const [counts, setCounts] = useState({ notifications: 0, messages: 0 });
+
+  // Fetch initial unread counts on mount
+  useEffect(() => {
+    if (!user) return;
+    const fetchUnread = async () => {
+      const [{ count: nc }, { count: mc }] = await Promise.all([
+        supabase.from("notifications").select("*", { count: "exact", head: true }).eq("user_id", user.id).eq("read", false),
+        supabase.from("messages").select("*", { count: "exact", head: true }).neq("sender_id", user.id)
+          .in("conversation_id",
+            (await supabase.from("conversations").select("id").or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`))
+              .data?.map((c: any) => c.id) ?? []
+          ).eq("read", false),
+      ]);
+      setCounts({ notifications: nc ?? 0, messages: mc ?? 0 });
+    };
+    fetchUnread().catch(() => {});
+  }, [user]);
+
+  // Reset message badge when user navigates to /messages
+  useEffect(() => {
+    if (loc.startsWith("/messages")) setCounts(p => ({ ...p, messages: 0 }));
+    if (loc.startsWith("/notifications")) setCounts(p => ({ ...p, notifications: 0 }));
+  }, [loc]);
+
+  // Realtime subscriptions
+  useRealtimeNotifications(user?.id, setCounts);
 
   // Show install banner after 10s if installable
   useEffect(() => {
@@ -168,11 +197,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
               {user ? (
                 <>
-                  <Link href="/messages" className="hidden sm:flex p-2 text-white/60 hover:text-white hover:bg-white/10 rounded-lg transition-all active:scale-95">
+                  <Link href="/messages" className="hidden sm:flex relative p-2 text-white/60 hover:text-white hover:bg-white/10 rounded-lg transition-all active:scale-95">
                     <MessageCircle size={15} />
+                    {counts.messages > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center px-0.5">
+                        {counts.messages > 99 ? "99+" : counts.messages}
+                      </span>
+                    )}
                   </Link>
-                  <Link href="/notifications" className="hidden sm:flex p-2 text-white/60 hover:text-white hover:bg-white/10 rounded-lg transition-all active:scale-95">
+                  <Link href="/notifications" className="hidden sm:flex relative p-2 text-white/60 hover:text-white hover:bg-white/10 rounded-lg transition-all active:scale-95">
                     <Bell size={15} />
+                    {counts.notifications > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center px-0.5">
+                        {counts.notifications > 99 ? "99+" : counts.notifications}
+                      </span>
+                    )}
                   </Link>
                   <Link
                     href="/post-service"
@@ -322,6 +361,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className="flex items-center justify-around h-14 px-1">
           {BOTTOM_NAV.map(n => {
             const active = loc === n.href || (n.href !== "/" && loc.startsWith(n.href));
+            const badge = n.href === "/messages" ? counts.messages : n.href === "/notifications" ? counts.notifications : 0;
             return (
               <Link
                 key={n.href}
@@ -330,7 +370,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   active ? "text-blue-400" : "text-white/40 hover:text-white/70"
                 }`}
               >
-                <n.icon size={18} strokeWidth={active ? 2.5 : 1.8} />
+                <div className="relative">
+                  <n.icon size={18} strokeWidth={active ? 2.5 : 1.8} />
+                  {badge > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-3.5 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-0.5">
+                      {badge > 99 ? "99+" : badge}
+                    </span>
+                  )}
+                </div>
                 <span className="text-[10px] font-medium whitespace-nowrap leading-none">{n.label}</span>
                 {active && <span className="w-1 h-1 rounded-full bg-blue-400 mt-0.5" />}
               </Link>
