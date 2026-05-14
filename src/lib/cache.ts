@@ -45,6 +45,13 @@ export const cache = {
       .filter(k => k.startsWith(PREFIX))
       .forEach(k => localStorage.removeItem(k));
   },
+
+  clearPrefix(prefix: string): void {
+    const full = PREFIX + prefix;
+    Object.keys(localStorage)
+      .filter(k => k.startsWith(full))
+      .forEach(k => localStorage.removeItem(k));
+  },
 };
 
 /**

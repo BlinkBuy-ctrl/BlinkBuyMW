@@ -1,4 +1,4 @@
-import { cachedFetch } from "./cache";
+import { cachedFetch, cache } from "./cache";
 import { supabase } from "./supabase";
 
 // ---------------------------------------------------------------------------
@@ -329,28 +329,38 @@ async function post(url: string, body: Record<string, any> = {}): Promise<any> {
   if (seg[0] === "services" && seg.length === 1) {
     const user = await getAuthUser()
     const { data, error } = await insertWithAbort("services", { ...body, worker_id: user.id }, signal)
-    throwIfError(error); return data;
+    throwIfError(error);
+    cache.clearPrefix("/services");
+    cache.clearPrefix(`/users/${user.id}`);
+    return data;
   }
   if (seg[0] === "services" && seg[2] === "book") {
     const user = await getAuthUser()
     const { data, error } = await insertWithAbort("bookings", { service_id: seg[1], customer_id: user.id, ...body }, signal)
-    throwIfError(error); return data;
+    throwIfError(error);
+    cache.clearPrefix("/services");
+    return data;
   }
   if (seg[0] === "jobs" && seg.length === 1) {
     const user = await getAuthUser()
-    // FIX: use user_id (matches RLS policy) + poster_id for display queries
     const { data, error } = await insertWithAbort("jobs", { ...body, user_id: user.id, poster_id: user.id }, signal)
-    throwIfError(error); return data;
+    throwIfError(error);
+    cache.clearPrefix("/jobs");
+    return data;
   }
   if (seg[0] === "jobs" && seg[2] === "apply") {
     const user = await getAuthUser()
     const { data, error } = await insertWithAbort("applications", { job_id: seg[1], applicant_id: user.id, ...body }, signal)
-    throwIfError(error); return data;
+    throwIfError(error);
+    cache.clearPrefix(`/jobs/${seg[1]}`);
+    return data;
   }
   if (seg[0] === "marketplace" && seg.length === 1) {
     const user = await getAuthUser()
     const { data, error } = await insertWithAbort("marketplace_items", { ...body, seller_id: user.id }, signal)
-    throwIfError(error); return data;
+    throwIfError(error);
+    cache.clearPrefix("/marketplace");
+    return data;
   }
   if (seg[0] === "conversations" && seg[2] === "messages") {
     const user = await getAuthUser()
@@ -365,7 +375,9 @@ async function post(url: string, body: Record<string, any> = {}): Promise<any> {
   if (seg[0] === "notifications" && seg[1] === "mark-all-read") {
     const user = await getAuthUser()
     const { data, error } = await supabase.from("notifications").update({ read: true }).eq("user_id", user.id).select().abortSignal(signal)
-    throwIfError(error); return data;
+    throwIfError(error);
+    cache.clearPrefix("/notifications");
+    return data;
   }
   throw new Error(`api.post: unhandled route "${url}"`);
 }
@@ -385,19 +397,28 @@ async function put(url: string, body: Record<string, any> = {}): Promise<any> {
       if (ALLOWED.includes(key)) remapped[key] = v;
     }
     const { data, error } = await supabase.from("profiles").update(remapped).eq("id", seg[1]).select().single();
-    throwIfError(error); return data;
+    throwIfError(error);
+    cache.clearPrefix(`/users/${seg[1]}`);
+    cache.clearPrefix("/workers");
+    return data;
   }
   if (seg[0] === "notifications" && seg[2] === "read") {
     const { data, error } = await supabase.from("notifications").update({ read: true }).eq("id", seg[1]).select().single();
-    throwIfError(error); return data;
+    throwIfError(error);
+    cache.clearPrefix("/notifications");
+    return data;
   }
   if (seg[0] === "admin" && seg[1] === "users" && seg.length === 3) {
     const { data, error } = await supabase.from("profiles").update(body).eq("id", seg[2]).select().single();
-    throwIfError(error); return data;
+    throwIfError(error);
+    cache.clearPrefix(`/users/${seg[2]}`);
+    return data;
   }
   if (seg[0] === "admin" && seg[1] === "services" && seg.length === 3) {
     const { data, error } = await supabase.from("services").update(body).eq("id", seg[2]).select().single();
-    throwIfError(error); return data;
+    throwIfError(error);
+    cache.clearPrefix("/services");
+    return data;
   }
   throw new Error(`api.put: unhandled route "${url}"`);
 }
@@ -411,6 +432,9 @@ async function del(url: string): Promise<any> {
   if (seg[0] === "admin" && seg[1] === "users" && seg.length === 3) {
     const { error } = await supabase.from("profiles").delete().eq("id", seg[2]);
     throwIfError(error);
+    cache.clearPrefix(`/users/${seg[2]}`);
+    cache.clearPrefix("/workers");
+    cache.clearPrefix("/services");
     return { success: true };
   }
   throw new Error(`api.delete: unhandled route "${url}"`);
