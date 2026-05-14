@@ -30,6 +30,23 @@ export default function ServiceDetailPage() {
     } finally { setMsgLoading(false); }
   };
 
+  // Non-blocking view tracking — fires after service loads, never blocks UI
+  const trackView = async (workerId: string) => {
+    try {
+      // Build a daily-unique hash from navigator fingerprint (no PII stored)
+      const raw = `${navigator.userAgent}${screen.width}x${screen.height}${new Date().toDateString()}`;
+      const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
+      const hash = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
+      await supabase.rpc("upsert_service_view", {
+        p_service_id: id,
+        p_worker_id: workerId,
+        p_hash: hash,
+      });
+    } catch {
+      // Silently ignore — view tracking must never break the page
+    }
+  };
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -43,6 +60,9 @@ export default function ServiceDetailPage() {
         }
         setService(svc || null);
         setReviews(Array.isArray(rvData) ? rvData : (rvData.reviews || []));
+        // Track view after we know the worker_id — fire-and-forget
+        const wId = svc?.worker?.id ?? svc?.profiles?.id;
+        if (wId) trackView(wId);
       } catch (e) {
         console.error(e);
         setService(null);
