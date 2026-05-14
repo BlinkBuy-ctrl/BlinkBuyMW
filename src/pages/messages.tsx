@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
-import { Send, ArrowLeft, Search, Phone, Shield, CheckCheck, Mic, Paperclip, Smile } from "lucide-react";
+import { Send, ArrowLeft, Search, Phone, Shield, CheckCheck } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
 
@@ -901,24 +901,6 @@ export default function MessagesPage() {
               gap: 8,
             }}
           >
-            <button
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: "50%",
-                background: "rgba(255,255,255,0.05)",
-                border: "none",
-                cursor: "pointer",
-                color: "rgba(255,255,255,0.4)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-            >
-              <Smile size={18} />
-            </button>
-
             <div
               style={{
                 flex: 1,
@@ -960,20 +942,6 @@ export default function MessagesPage() {
                   minWidth: 0,
                 }}
               />
-              {!newMsg && (
-                <button
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    color: "rgba(255,255,255,0.3)",
-                    display: "flex",
-                    padding: 4,
-                  }}
-                >
-                  <Paperclip size={16} />
-                </button>
-              )}
             </div>
 
             <button
@@ -1000,7 +968,7 @@ export default function MessagesPage() {
               {newMsg.trim() ? (
                 <Send size={16} color="white" style={{ transform: "translateX(1px)" }} />
               ) : (
-                <Mic size={16} color="rgba(255,255,255,0.3)" />
+                <Send size={16} color="rgba(255,255,255,0.2)" style={{ transform: "translateX(1px)" }} />
               )}
             </button>
           </div>
