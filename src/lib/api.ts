@@ -209,10 +209,57 @@ async function get(url: string): Promise<any> {
     return normalizeItem(data);
   }
   if (seg[0] === "users" && seg[1] === "me" && seg[2] === "stats") {
-    const user = await getAuthUser()
-    const { data, error } = await supabase.from("profiles").select("rating, jobs_completed").eq("id", user.id).maybeSingle();
-    if (error && error.code !== "PGRST116") throwIfError(error);
-    return data;
+    const user = await getAuthUser();
+    const uid = user.id;
+
+    // Profile stats
+    const { data: prof } = await supabase
+      .from("profiles")
+      .select("rating, jobs_completed")
+      .eq("id", uid)
+      .maybeSingle();
+
+    // Total unique views for this worker
+    const { count: totalViews } = await supabase
+      .from("service_views")
+      .select("*", { count: "exact", head: true })
+      .eq("worker_id", uid);
+
+    // 7-day sparkline: views per day grouped by service_id
+    const since = new Date();
+    since.setDate(since.getDate() - 6);
+    since.setHours(0, 0, 0, 0);
+    const { data: sparkRaw } = await supabase
+      .from("service_views")
+      .select("service_id, viewed_at")
+      .eq("worker_id", uid)
+      .gte("viewed_at", since.toISOString());
+
+    // Aggregate: { service_id -> { date -> count } }
+    const sparkMap: Record<string, Record<string, number>> = {};
+    for (const row of sparkRaw ?? []) {
+      const day = new Date(row.viewed_at).toISOString().slice(0, 10);
+      if (!sparkMap[row.service_id]) sparkMap[row.service_id] = {};
+      sparkMap[row.service_id][day] = (sparkMap[row.service_id][day] ?? 0) + 1;
+    }
+    // Fill last 7 days so sparkline always has 7 points
+    const days7 = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(since);
+      d.setDate(d.getDate() + i);
+      return d.toISOString().slice(0, 10);
+    });
+    const viewsSparkline: Record<string, number[]> = {};
+    for (const [svcId, dayMap] of Object.entries(sparkMap)) {
+      viewsSparkline[svcId] = days7.map(d => dayMap[d] ?? 0);
+    }
+
+    return {
+      rating: prof?.rating ?? 0,
+      jobs_completed: prof?.jobs_completed ?? 0,
+      totalViews: totalViews ?? 0,
+      viewsSparkline,   // { [service_id]: [n,n,n,n,n,n,n] }
+      sparkDays: days7, // ["2025-06-01", ...]
+    };
   }
   if (seg[0] === "users" && seg[2] === "reviews") {
     let q = supabase.from("reviews").select("*, profiles(*)").eq("worker_id", seg[1]);
