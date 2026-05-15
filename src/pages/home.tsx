@@ -16,7 +16,7 @@ const CATS = [
   { name: "Find Work", icon: Briefcase, href: "/jobs", color: "bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400" },
   { name: "Transport", icon: Truck, href: "/services?category=Transport+%26+Delivery", color: "bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400" },
   { name: "Food & Needs", icon: UtensilsCrossed, href: "/services?category=Food+%26+Daily+Needs", color: "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400" },
-  { name: "Education", icon: GraduationCap, href: "/services?category=Education+%26+Skills", color: "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400" },
+  { name: "Education", icon: GraduationCap, href: "/education", color: "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400" },
   { name: "Marketplace", icon: ShoppingBag, href: "/marketplace", color: "bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400" },
   { name: "Health", icon: Heart, href: "/services?category=Health+%26+Personal+Support", color: "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400" },
   { name: "Digital", icon: Monitor, href: "/services?category=Digital+%26+Online+Services", color: "bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400" },
