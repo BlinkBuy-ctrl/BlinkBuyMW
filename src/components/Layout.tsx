@@ -14,27 +14,25 @@ import {
 } from "lucide-react";
 
 const NAV = [
-  { label: "Home", href: "/services?category=Home+%26+Property+Services", icon: Home },
-  { label: "Find Work", href: "/jobs", icon: Briefcase },
-  { label: "Transport", href: "/services?category=Transport+%26+Delivery", icon: Truck },
-  { label: "Food", href: "/services?category=Food+%26+Daily+Needs", icon: UtensilsCrossed },
-  { label: "Education", href: "/education", icon: GraduationCap },
-  { label: "Marketplace", href: "/marketplace", icon: ShoppingBag },
-  { label: "Health", href: "/services?category=Health+%26+Personal+Support", icon: Heart },
-  { label: "Digital", href: "/services?category=Digital+%26+Online+Services", icon: Monitor },
-  { label: "Emergency", href: "/emergency", icon: Zap },
+  { label: "Home",        href: "/services?category=Home+%26+Property+Services", icon: Home },
+  { label: "Find Work",   href: "/jobs",                                           icon: Briefcase },
+  { label: "Transport",   href: "/services?category=Transport+%26+Delivery",       icon: Truck },
+  { label: "Food",        href: "/services?category=Food+%26+Daily+Needs",         icon: UtensilsCrossed },
+  { label: "Education",   href: "/education",                                       icon: GraduationCap },
+  { label: "Marketplace", href: "/marketplace",                                    icon: ShoppingBag },
+  { label: "Health",      href: "/services?category=Health+%26+Personal+Support",  icon: Heart },
+  { label: "Digital",     href: "/services?category=Digital+%26+Online+Services",  icon: Monitor },
+  { label: "Emergency",   href: "/emergency",                                       icon: Zap },
 ];
 
-// Bottom nav items for mobile (most-used 5)
 const BOTTOM_NAV = [
-  { label: "Home", href: "/", icon: Home },
-  { label: "Services", href: "/services", icon: ShoppingBag },
-  { label: "Jobs", href: "/jobs", icon: Briefcase },
-  { label: "Messages", href: "/messages", icon: MessageCircle },
-  { label: "Profile", href: "/dashboard", icon: User },
+  { label: "Home",     href: "/",          icon: Home },
+  { label: "Services", href: "/services",  icon: ShoppingBag },
+  { label: "Jobs",     href: "/jobs",      icon: Briefcase },
+  { label: "Messages", href: "/messages",  icon: MessageCircle },
+  { label: "Profile",  href: "/dashboard", icon: User },
 ];
 
-// Memoize nav item to avoid re-renders on every route change
 const NavItem = memo(({ n, active }: { n: typeof NAV[0]; active: boolean }) => (
   <Link
     href={n.href}
@@ -60,46 +58,65 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [pageVisible, setPageVisible] = useState(true);
   const [counts, setCounts] = useState({ notifications: 0, messages: 0 });
 
-  // Fetch initial unread counts on mount
+  // ── Gated: only fetch unread counts once auth is fully resolved ──
   useEffect(() => {
-    if (!user) return;
-    const fetchUnread = async () => {
-      const [{ count: nc }, { count: mc }] = await Promise.all([
-        supabase.from("notifications").select("*", { count: "exact", head: true }).eq("user_id", user.id).eq("read", false),
-        supabase.from("messages").select("*", { count: "exact", head: true }).neq("sender_id", user.id)
-          .in("conversation_id",
-            (await supabase.from("conversations").select("id").or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`))
-              .data?.map((c: any) => c.id) ?? []
-          ).eq("read", false),
-      ]);
-      setCounts({ notifications: nc ?? 0, messages: mc ?? 0 });
-    };
-    fetchUnread().catch(() => {});
-  }, [user]);
+    if (isLoading || !user) return;
+    let cancelled = false;
 
-  // Reset message badge when user navigates to /messages
+    const fetchUnread = async () => {
+      try {
+        const convRes = await supabase
+          .from("conversations")
+          .select("id")
+          .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`);
+
+        const convIds = convRes.data?.map((c: any) => c.id) ?? [];
+
+        const [{ count: nc }, { count: mc }] = await Promise.all([
+          supabase
+            .from("notifications")
+            .select("*", { count: "exact", head: true })
+            .eq("user_id", user.id)
+            .eq("read", false),
+          convIds.length > 0
+            ? supabase
+                .from("messages")
+                .select("*", { count: "exact", head: true })
+                .neq("sender_id", user.id)
+                .in("conversation_id", convIds)
+                .eq("read", false)
+            : Promise.resolve({ count: 0 }),
+        ]);
+
+        if (!cancelled) setCounts({ notifications: nc ?? 0, messages: mc ?? 0 });
+      } catch { /* non-fatal */ }
+    };
+
+    fetchUnread();
+    return () => { cancelled = true; };
+  }, [user, isLoading]);
+
+  // Reset badges when navigating to relevant pages
   useEffect(() => {
-    if (loc.startsWith("/messages")) setCounts(p => ({ ...p, messages: 0 }));
+    if (loc.startsWith("/messages"))      setCounts(p => ({ ...p, messages: 0 }));
     if (loc.startsWith("/notifications")) setCounts(p => ({ ...p, notifications: 0 }));
   }, [loc]);
 
-  // Realtime subscriptions
-  useRealtimeNotifications(user?.id, setCounts);
+  // Realtime — pass null while auth is still loading to prevent premature subscription
+  useRealtimeNotifications(isLoading ? null : user?.id, setCounts);
 
-  // Show install banner after 10s if installable
+  // PWA install banner after 10s
   useEffect(() => {
     if (!isInstallable) return;
-    const dismissed = sessionStorage.getItem("pwa_banner_dismissed");
-    if (dismissed) return;
+    if (sessionStorage.getItem("pwa_banner_dismissed")) return;
     const t = setTimeout(() => setShowInstallBanner(true), 10_000);
     return () => clearTimeout(t);
   }, [isInstallable]);
 
-  // Smooth page transition on route change
+  // Page fade on route change
   useEffect(() => {
     setPageVisible(false);
     const t = setTimeout(() => setPageVisible(true), 80);
-    // Close mobile menu on nav
     setOpen(false);
     setUMenu(false);
     return () => clearTimeout(t);
@@ -122,13 +139,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     sessionStorage.setItem("pwa_banner_dismissed", "1");
   };
 
-  // ── Avatar helper: uses camelCase profilePhoto (normalizer converts it) ──
   const avatarLetter = profile?.name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || "?";
-  const avatarPhoto = profile?.profilePhoto ?? profile?.profile_photo ?? null;
+  const avatarPhoto  = profile?.profilePhoto ?? profile?.profile_photo ?? null;
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      {/* ── PWA Install Banner ── */}
+      {/* PWA Install Banner */}
       {showInstallBanner && (
         <div className="fixed bottom-20 left-4 right-4 z-[60] md:bottom-4 md:left-auto md:right-4 md:w-80">
           <div className="bg-[hsl(215,55%,12%)] border border-white/10 rounded-2xl p-4 shadow-2xl flex items-start gap-3">
@@ -145,10 +161,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 >
                   <Download size={12} /> Install App
                 </button>
-                <button
-                  onClick={dismissBanner}
-                  className="text-white/40 hover:text-white text-xs px-2 transition-all"
-                >
+                <button onClick={dismissBanner} className="text-white/40 hover:text-white text-xs px-2 transition-all">
                   Not now
                 </button>
               </div>
@@ -160,11 +173,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      {/* ── HEADER ── */}
+      {/* HEADER */}
       <header className="sticky top-0 z-50 bg-[hsl(215,55%,12%)] text-white shadow-xl border-b border-white/5">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center justify-between h-14">
-            {/* Logo */}
             <Link href="/" className="flex items-center gap-2 shrink-0 group">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[hsl(210,100%,60%)] to-[hsl(210,100%,45%)] flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform duration-150 active:scale-95">
                 <span className="text-white font-black text-sm">B</span>
@@ -172,7 +184,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <span className="font-black text-lg tracking-tight">BlinkBuy</span>
             </Link>
 
-            {/* Desktop nav */}
             <nav className="hidden lg:flex items-center">
               {NAV.map(n => {
                 const active = loc === n.href || loc.startsWith(n.href.split("?")[0]);
@@ -180,7 +191,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               })}
             </nav>
 
-            {/* Right controls */}
             <div className="flex items-center gap-1.5">
               <button
                 onClick={toggleLang}
@@ -220,17 +230,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     <Plus size={13} /> Post
                   </Link>
 
-                  {/* User menu */}
                   <div className="relative">
                     <button
                       onClick={() => setUMenu(!uMenu)}
                       className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 rounded-xl px-2.5 py-1.5 transition-all border border-white/10 active:scale-95"
                     >
                       <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[hsl(210,100%,60%)] to-[hsl(210,100%,40%)] flex items-center justify-center text-xs font-black text-white overflow-hidden">
-                        {/* FIX: use avatarPhoto (camelCase) and show spinner while loading */}
-                        {isLoading ? (
-                          <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        ) : avatarPhoto ? (
+                        {avatarPhoto ? (
                           <img src={avatarPhoto} alt="" className="w-full h-full object-cover" />
                         ) : (
                           avatarLetter
@@ -249,10 +255,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                           <div className="text-xs text-muted-foreground truncate">{user.email}</div>
                         </div>
                         {[
-                          { href: `/profile/${user.id}`, icon: User, label: "My Profile" },
-                          { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-                          { href: "/settings", icon: Settings, label: "Settings" },
-                          { href: "/about", icon: null, label: "ℹ️ About Us" },
+                          { href: `/profile/${user.id}`, icon: User,           label: "My Profile" },
+                          { href: "/dashboard",          icon: LayoutDashboard, label: "Dashboard" },
+                          { href: "/settings",           icon: Settings,        label: "Settings" },
+                          { href: "/about",              icon: null,            label: "ℹ️ About Us" },
                         ].map(item => (
                           <Link
                             key={item.href}
@@ -306,7 +312,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
-        {/* Mobile slide-down menu */}
         {open && (
           <div className="lg:hidden border-t border-white/10 bg-[hsl(215,50%,10%)] animate-in slide-in-from-top-2 duration-200">
             <div className="px-4 py-3 grid grid-cols-3 gap-1.5">
@@ -324,44 +329,30 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </div>
             {user && (
               <div className="border-t border-white/10 px-4 py-2.5 flex gap-4 flex-wrap">
-                <Link href="/messages" className="flex items-center gap-1.5 text-xs text-white/65 hover:text-white" onClick={() => setOpen(false)}>
-                  <MessageCircle size={13} /> Messages
-                </Link>
-                <Link href="/notifications" className="flex items-center gap-1.5 text-xs text-white/65 hover:text-white" onClick={() => setOpen(false)}>
-                  <Bell size={13} /> Alerts
-                </Link>
-                <Link href="/dashboard" className="flex items-center gap-1.5 text-xs text-white/65 hover:text-white" onClick={() => setOpen(false)}>
-                  <LayoutDashboard size={13} /> Dashboard
-                </Link>
-                <Link href={`/profile/${user.id}`} className="flex items-center gap-1.5 text-xs text-white/65 hover:text-white" onClick={() => setOpen(false)}>
-                  <User size={13} /> Profile
-                </Link>
-                <Link href="/settings" className="flex items-center gap-1.5 text-xs text-white/65 hover:text-white" onClick={() => setOpen(false)}>
-                  <Settings size={13} /> Settings
-                </Link>
+                <Link href="/messages"           className="flex items-center gap-1.5 text-xs text-white/65 hover:text-white" onClick={() => setOpen(false)}><MessageCircle size={13} /> Messages</Link>
+                <Link href="/notifications"      className="flex items-center gap-1.5 text-xs text-white/65 hover:text-white" onClick={() => setOpen(false)}><Bell size={13} /> Alerts</Link>
+                <Link href="/dashboard"          className="flex items-center gap-1.5 text-xs text-white/65 hover:text-white" onClick={() => setOpen(false)}><LayoutDashboard size={13} /> Dashboard</Link>
+                <Link href={`/profile/${user.id}`} className="flex items-center gap-1.5 text-xs text-white/65 hover:text-white" onClick={() => setOpen(false)}><User size={13} /> Profile</Link>
+                <Link href="/settings"           className="flex items-center gap-1.5 text-xs text-white/65 hover:text-white" onClick={() => setOpen(false)}><Settings size={13} /> Settings</Link>
               </div>
             )}
           </div>
         )}
       </header>
 
-      {/* ── MAIN CONTENT ── */}
       <main
         className="flex-1 pb-16 lg:pb-0"
-        style={{
-          opacity: pageVisible ? 1 : 0,
-          transition: "opacity 120ms ease",
-        }}
+        style={{ opacity: pageVisible ? 1 : 0, transition: "opacity 120ms ease" }}
       >
         {children}
       </main>
 
-      {/* ── MOBILE BOTTOM NAV (native app feel) ── */}
+      {/* MOBILE BOTTOM NAV */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 z-50 bg-[hsl(215,55%,10%)] border-t border-white/10 safe-area-inset-bottom">
         <div className="flex items-center justify-around h-14 px-1">
           {BOTTOM_NAV.map(n => {
             const active = loc === n.href || (n.href !== "/" && loc.startsWith(n.href));
-            const badge = n.href === "/messages" ? counts.messages : n.href === "/notifications" ? counts.notifications : 0;
+            const badge  = n.href === "/messages" ? counts.messages : n.href === "/notifications" ? counts.notifications : 0;
             return (
               <Link
                 key={n.href}
@@ -397,7 +388,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </nav>
 
-      {/* ── FOOTER (desktop only) ── */}
+      {/* FOOTER (desktop only) */}
       <footer className="hidden lg:block bg-[hsl(215,55%,8%)] text-white/70 border-t border-white/5">
         <div className="max-w-7xl mx-auto px-4 py-10">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-8">
@@ -411,12 +402,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <p className="text-xs text-white/45 leading-relaxed mb-4">
                 Your trusted local services marketplace. Connecting Malawians since 2026.
               </p>
-              <div className="flex gap-2">
-                <a href="https://wa.me/265999626944" target="_blank" rel="noopener noreferrer"
-                  className="text-xs bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded-lg transition-all">
-                  WhatsApp Us
-                </a>
-              </div>
+              <a href="https://wa.me/265999626944" target="_blank" rel="noopener noreferrer"
+                className="text-xs bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded-lg transition-all">
+                WhatsApp Us
+              </a>
             </div>
             <div>
               <h4 className="text-xs font-black text-white uppercase tracking-wider mb-3">Services</h4>
@@ -456,7 +445,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </footer>
 
-      {/* Click-away for user menu */}
       {uMenu && <div className="fixed inset-0 z-40" onClick={() => setUMenu(false)} />}
     </div>
   );
