@@ -1,31 +1,26 @@
 import { createClient } from '@supabase/supabase-js'
 
-// These values are read from Netlify environment variables at build time.
-// If they are missing, we fall back to the hardcoded values below so the
-// app still loads (Google OAuth will still work as long as Supabase is configured).
-const supabaseUrl =
-  import.meta.env.VITE_SUPABASE_URL ||
-  "https://atjjsgbhbeuzqrpyrspa.supabase.co"
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
 
-const supabaseAnonKey =
-  import.meta.env.VITE_SUPABASE_ANON_KEY ||
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0ampzZ2JoYmV1enFycHlyc3BhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0MzY4NjMsImV4cCI6MjA5MjAxMjg2M30.cjn4PJCkZQ31B0DZ5NRz86Pehn9IRTDLghSFnt6jB-A"
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('[BlinkBuy] VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY is missing from environment variables.')
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: true,          // Keep session in localStorage
-    autoRefreshToken: true,        // Auto refresh JWT
-    detectSessionInUrl: true,      // Handle OAuth redirects
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    // Single explicit storage key — identical in browser AND PWA/standalone installed mode
+    storageKey: 'blinkbuy_auth_token',
+    storage: window.localStorage,
   },
   realtime: {
-    params: {
-      eventsPerSecond: 10,         // Throttle realtime events
-    },
-    timeout: 20000,                // 20s timeout on realtime connections
+    params: { eventsPerSecond: 10 },
+    timeout: 20000,
   },
   global: {
-    headers: {
-      'X-Client-Info': 'blinkbuy-web',
-    },
+    headers: { 'X-Client-Info': 'blinkbuy-web' },
   },
 })
