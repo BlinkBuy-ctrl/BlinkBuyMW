@@ -29,6 +29,7 @@ const PostItemPage     = lazy(() => import("@/pages/post-item"));
 const NotificationsPage= lazy(() => import("@/pages/notifications"));
 const AdminPage        = lazy(() => import("@/pages/admin"));
 const AboutPage        = lazy(() => import("@/pages/about"));
+const EducationPage    = lazy(() => import("@/pages/education"));
 const NotFound         = lazy(() => import("@/pages/not-found"));
 
 // ── Optimized QueryClient with caching & retry config ────────────────────────
@@ -105,6 +106,7 @@ function RouterContent() {
         <Route path="/notifications" component={NotificationsPage} />
         <Route path="/admin"         component={AdminPage} />
         <Route path="/about"         component={AboutPage} />
+        <Route path="/education"     component={EducationPage} />
         <Route                       component={NotFound} />
       </Switch>
     </Suspense>
