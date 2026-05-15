@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, useRef } from 'react'
+import { useState, useEffect, createContext, useContext, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { User } from '@supabase/supabase-js'
 
@@ -39,20 +39,21 @@ function normalizeProfile(data: Record<string, unknown>): Record<string, unknown
 export function useAuthState(): AuthContextType {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<any | null>(null)
-  // FIX: start as true — stays true until INITIAL_SESSION fires
+  // isLoading stays TRUE until INITIAL_SESSION fires AND profile fetch completes
   const [isLoading, setIsLoading] = useState(true)
 
   const lastFetchedUserId = useRef<string | null>(null)
   const isFetchingRef = useRef(false)
+  const initResolvedRef = useRef(false)
 
-  const fetchProfile = async (userId: string, force = false) => {
+  const fetchProfile = useCallback(async (userId: string, force = false): Promise<void> => {
     if (!force && lastFetchedUserId.current === userId) return
     if (isFetchingRef.current) return
 
     isFetchingRef.current = true
     try {
       const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), 6000)
+      const timer = setTimeout(() => controller.abort(), 8000)
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -70,24 +71,18 @@ export function useAuthState(): AuthContextType {
     } finally {
       isFetchingRef.current = false
     }
-  }
+  }, [])
 
   useEffect(() => {
-    // FIX: Remove getSession() call entirely.
-    // onAuthStateChange fires INITIAL_SESSION synchronously on mount with the
-    // persisted session — this is the single authoritative source of truth.
-    // Calling getSession() in parallel creates a race with isFetchingRef that
-    // silently drops the profile fetch, leaving profile=null after refresh.
-
-    // Safety valve — if Supabase never fires, unblock UI after 8s
-    const safetyTimer = setTimeout(() => setIsLoading(false), 8000)
+    // Safety valve — unblock UI after 10s if Supabase never fires INITIAL_SESSION
+    const safetyTimer = setTimeout(() => {
+      if (!initResolvedRef.current) {
+        initResolvedRef.current = true
+        setIsLoading(false)
+      }
+    }, 10000)
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // INITIAL_SESSION fires on mount with persisted session (or null)
-      // SIGNED_IN fires after login
-      // TOKEN_REFRESHED fires on silent refresh
-      // SIGNED_OUT fires on logout
-
       setUser(session?.user ?? null)
 
       if (session?.user) {
@@ -97,20 +92,24 @@ export function useAuthState(): AuthContextType {
           event === 'USER_UPDATED' ||
           event === 'TOKEN_REFRESHED'
         ) {
-          // Force re-fetch on TOKEN_REFRESHED; use cache for the rest
-          const force = event === 'TOKEN_REFRESHED'
+          // Force re-fetch on SIGNED_IN and TOKEN_REFRESHED to ensure fresh profile
+          const force = event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN'
           await fetchProfile(session.user.id, force)
         }
       } else {
         lastFetchedUserId.current = null
+        isFetchingRef.current = false
         setProfile(null)
       }
 
-      // FIX: Only resolve loading after INITIAL_SESSION — this is the event
-      // that indicates Supabase has finished restoring persisted auth.
+      // Resolve loading ONLY after INITIAL_SESSION (the persisted-session restore event)
+      // or SIGNED_OUT (confirms no session). All other events happen after loading is done.
       if (event === 'INITIAL_SESSION' || event === 'SIGNED_OUT') {
-        clearTimeout(safetyTimer)
-        setIsLoading(false)
+        if (!initResolvedRef.current) {
+          initResolvedRef.current = true
+          clearTimeout(safetyTimer)
+          setIsLoading(false)
+        }
       }
     })
 
@@ -118,7 +117,7 @@ export function useAuthState(): AuthContextType {
       clearTimeout(safetyTimer)
       subscription.unsubscribe()
     }
-  }, [])
+  }, [fetchProfile])
 
   const login = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -134,9 +133,9 @@ export function useAuthState(): AuthContextType {
           name: data.name,
           phone: data.phone,
           role: data.role,
-          location: data.location
-        }
-      }
+          location: data.location,
+        },
+      },
     })
     if (error) throw new Error(error.message)
 
@@ -152,6 +151,7 @@ export function useAuthState(): AuthContextType {
   const logout = async () => {
     await supabase.auth.signOut()
     lastFetchedUserId.current = null
+    isFetchingRef.current = false
     setProfile(null)
   }
 
