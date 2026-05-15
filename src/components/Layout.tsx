@@ -18,7 +18,7 @@ const NAV = [
   { label: "Find Work", href: "/jobs", icon: Briefcase },
   { label: "Transport", href: "/services?category=Transport+%26+Delivery", icon: Truck },
   { label: "Food", href: "/services?category=Food+%26+Daily+Needs", icon: UtensilsCrossed },
-  { label: "Education", href: "/services?category=Education+%26+Skills", icon: GraduationCap },
+  { label: "Education", href: "/education", icon: GraduationCap },
   { label: "Marketplace", href: "/marketplace", icon: ShoppingBag },
   { label: "Health", href: "/services?category=Health+%26+Personal+Support", icon: Heart },
   { label: "Digital", href: "/services?category=Digital+%26+Online+Services", icon: Monitor },
