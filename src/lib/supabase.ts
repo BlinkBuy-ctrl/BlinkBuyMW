@@ -4,7 +4,12 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('[BlinkBuy] VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY is missing from environment variables.')
+  // Warn instead of throw — throwing here crashes the entire app on import.
+  // The missing-env error will surface naturally as a failed Supabase request.
+  console.error(
+    '[BlinkBuy] VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY is missing.\n' +
+    'Go to Vercel → Project → Settings → Environment Variables and add both keys.'
+  )
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
