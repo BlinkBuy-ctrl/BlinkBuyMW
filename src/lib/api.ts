@@ -167,7 +167,7 @@ async function get(url: string): Promise<any> {
     // FIX (3): add { count: "exact" } and return total
     let q = supabase.from("services").select("*, profiles(*)", { count: "exact" });
     q = applyFilters(q, params);
-    q = q.order("is_boosted", { ascending: false }).order("created_at", { ascending: false });
+    q = q.order("created_at", { ascending: false });
     const { data, error, count } = await q;
     throwIfError(error);
     return { services: (data ?? []).map(normalizeService), total: count ?? 0 };
