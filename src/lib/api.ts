@@ -123,7 +123,9 @@ function applyFilters(query: any, params: ReturnType<typeof parseParams>, skipPa
   if (params.location) query = query.ilike("location", `%${params.location}%`);
   if (params.search) query = query.ilike("title", `%${params.search}%`);
   if (params.workerId) query = query.eq("worker_id", params.workerId);
-  if (params.sortBy === "rating") query = query.order("rating", { ascending: false });
+  if (params.sortBy === "rating")     query = query.order("rating",     { ascending: false });
+  else if (params.sortBy === "price_asc")  query = query.order("price",      { ascending: true });
+  else if (params.sortBy === "price_desc") query = query.order("price",      { ascending: false });
 
   // FIX (2): apply new filters
   if (params.isOnline !== null) query = query.eq("is_online", params.isOnline);
@@ -165,7 +167,7 @@ async function get(url: string): Promise<any> {
 
   if (seg[0] === "services" && seg.length === 1) {
     // FIX (3): add { count: "exact" } and return total
-    let q = supabase.from("services").select("*, profiles(*)", { count: "exact" });
+    let q = supabase.from("services").select("id, title, description, category, location, price, price_type, price_display, is_online, rating, review_count, worker_id, status, profiles(id, name, profile_photo, is_online, is_verified, is_trusted, is_boosted, whatsapp, phone)", { count: "exact" }).eq("status", "active");
     q = applyFilters(q, params);
     q = q.order("created_at", { ascending: false });
     const { data, error, count } = await q;
@@ -185,7 +187,7 @@ async function get(url: string): Promise<any> {
     return normalizeService(data);
   }
   if (seg[0] === "jobs" && seg.length === 1) {
-    let q = supabase.from("jobs").select("*, profiles(*)");
+    let q = supabase.from("jobs").select("*, profiles(*)").eq("status", "open");
     q = applyFilters(q, params);
     const { data, error } = await q;
     throwIfError(error);
@@ -197,7 +199,7 @@ async function get(url: string): Promise<any> {
     return normalizeJob(data);
   }
   if (seg[0] === "marketplace" && seg.length === 1) {
-    let q = supabase.from("marketplace_items").select("*, profiles(*)");
+    let q = supabase.from("marketplace_items").select("*, profiles(*)").eq("status", "available");
     q = applyFilters(q, params);
     const { data, error } = await q;
     throwIfError(error);
@@ -220,20 +222,23 @@ async function get(url: string): Promise<any> {
       .maybeSingle();
 
     // Total unique views for this worker
-    const { count: totalViews } = await supabase
+    // service_views table may not exist yet — guard so dashboard never crashes
+    const viewsRes = await supabase
       .from("service_views")
       .select("*", { count: "exact", head: true })
       .eq("worker_id", uid);
+    const totalViews = viewsRes.error ? 0 : (viewsRes.count ?? 0);
 
     // 7-day sparkline: views per day grouped by service_id
     const since = new Date();
     since.setDate(since.getDate() - 6);
     since.setHours(0, 0, 0, 0);
-    const { data: sparkRaw } = await supabase
+    const sparkRes = await supabase
       .from("service_views")
       .select("service_id, viewed_at")
       .eq("worker_id", uid)
       .gte("viewed_at", since.toISOString());
+    const sparkRaw = sparkRes.error ? [] : (sparkRes.data ?? []);
 
     // Aggregate: { service_id -> { date -> count } }
     const sparkMap: Record<string, Record<string, number>> = {};
