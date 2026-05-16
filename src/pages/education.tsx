@@ -74,15 +74,20 @@ export default function EducationPage() {
   const [tab,         setTab]         = useState<Tab>("resources");
 
   // ── Fetch all data (only when user is logged in) ───────────────────────────
+  // ── Fetch all data (only when user is logged in) ───────────────────────────
   const fetchAll = async () => {
     if (!user) return;
     setDataLoading(true);
     try {
+      const tableNotFound = (e: any) =>
+        e?.code === "42P01" || e?.message?.includes("does not exist");
+
       const [rRes, sRes, pRes] = await Promise.all([
         supabase
           .from("otechy_resources")
           .select("*")
-          .eq("is_approved", true)
+          // NOTE: .eq("is_approved", true) removed — column does not exist in schema yet.
+          // Add it back after running the otechy migration SQL below.
           .order("created_at", { ascending: false }),
 
         supabase
@@ -97,8 +102,9 @@ export default function EducationPage() {
           .eq("buyer_id", user.id),
       ]);
 
-      if (rRes.error) throw rRes.error;
-      if (sRes.error) throw sRes.error;
+      // If tables don't exist yet (pre-migration), treat as empty — don't throw
+      if (rRes.error && !tableNotFound(rRes.error)) throw rRes.error;
+      if (sRes.error && !tableNotFound(sRes.error)) throw sRes.error;
 
       setResources(rRes.data ?? []);
       setScholarships(sRes.data ?? []);
@@ -106,7 +112,7 @@ export default function EducationPage() {
     } catch (e: any) {
       toast({ title: "Failed to load", description: e.message, variant: "destructive" });
     } finally {
-      setDataLoading(false);
+      setDataLoading(false); // ALWAYS fires — prevents infinite spinner
     }
   };
 
